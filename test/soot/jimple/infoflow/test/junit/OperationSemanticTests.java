@@ -10,8 +10,6 @@ import soot.jimple.infoflow.Infoflow;
 /**
  * Tests that require the taint tracking engine to correctly evaluate the
  * semantics of primitive operations.
- * 
- * @author Steven Arzt
  */
 public class OperationSemanticTests extends JUnitTests{
 

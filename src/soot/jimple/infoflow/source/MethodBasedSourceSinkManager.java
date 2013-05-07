@@ -10,7 +10,6 @@ import soot.jimple.Stmt;
  * can conveniently work on the called methods instead of having to analyze the
  * call statement every time
  * 
- * @author Steven Arzt
  *
  */
 public abstract class MethodBasedSourceSinkManager implements SourceSinkManager {

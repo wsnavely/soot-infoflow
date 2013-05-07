@@ -12,7 +12,6 @@ import soot.jimple.infoflow.test.android.TelephonyManager;
 
 /**
  * 
- * @author Christian
  *
  */
 public class MapTestCode {

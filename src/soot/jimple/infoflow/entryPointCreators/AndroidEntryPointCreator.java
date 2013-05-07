@@ -34,7 +34,6 @@ import soot.jimple.internal.JNopStmt;
  * and http://developer.android.com/reference/android/content/BroadcastReceiver.html#ReceiverLifecycle
  * and http://developer.android.com/reference/android/content/BroadcastReceiver.html
  * 
- * @author Christian, Steven Arzt
  * 
  */
 public class AndroidEntryPointCreator extends BaseEntryPointCreator implements IEntryPointCreator{

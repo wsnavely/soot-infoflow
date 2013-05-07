@@ -11,7 +11,6 @@ import soot.jimple.infoflow.test.android.TelephonyManager;
 
 /**
  * tests list tainting
- * @author Christian
  *
  */
 public class ListTestCode {

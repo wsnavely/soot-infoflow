@@ -12,7 +12,6 @@ import soot.jimple.internal.JAssignStmt;
  * Taints the return value of a method call if one of the parameter values
  * or the base object is tainted.
  * 
- * @author Steven Arzt
  *
  */
 public class IdentityTaintWrapper implements ITaintPropagationWrapper {

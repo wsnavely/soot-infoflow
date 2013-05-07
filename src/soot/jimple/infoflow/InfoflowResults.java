@@ -14,13 +14,11 @@ import soot.jimple.Stmt;
 /**
  * Class for collecting information flow results
  * 
- * @author Steven Arzt
  */
 public class InfoflowResults {
 	
 	/**
 	 * Class for modeling information flowing out of a specific source
-	 * @author Steven Arzt
 	 */
 	public class SourceInfo {
 		private final Value source;
@@ -71,7 +69,6 @@ public class InfoflowResults {
 	
 	/**
 	 * Class for modeling information flowing into a specific source
-	 * @author Steven Arzt
 	 */
 	public class SinkInfo {
 		private final Value sink;

@@ -7,7 +7,6 @@ import soot.jimple.infoflow.test.android.TelephonyManager;
  * Target code for tests that require the taint tracking engine to correctly
  * evaluate the semantics of primitive operations.
  * 
- * @author Steven Arzt
  */
 public class OperationSemanticTestCode {
 	

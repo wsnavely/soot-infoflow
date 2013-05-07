@@ -9,7 +9,6 @@ import soot.jimple.Stmt;
 /**
  * This interface declares methods to define classes and methods which should not be analyzed directly.
  * Instead the outcome of the analysis is summarized (which improves performance and helps if the sources are not available)
- * @author Christian
  *
  */
 public interface ITaintPropagationWrapper {

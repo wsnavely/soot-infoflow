@@ -7,7 +7,6 @@ import soot.jimple.infoflow.test.android.ConnectionManager;
 import soot.jimple.infoflow.test.android.TelephonyManager;
 /**
  * checks if taint is removed after overwriting the values (for both string and list<string>)
- * @author Christian
  *
  */
 public class OverwriteTestCode {

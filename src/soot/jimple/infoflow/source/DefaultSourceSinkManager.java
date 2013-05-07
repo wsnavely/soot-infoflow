@@ -14,7 +14,6 @@ import soot.jimple.Stmt;
 /**
  * A {@link SourceSinkManager} working on lists of source and sink methods
  * 
- * @author Steven Arzt
  */
 public class DefaultSourceSinkManager extends MethodBasedSourceSinkManager {
 

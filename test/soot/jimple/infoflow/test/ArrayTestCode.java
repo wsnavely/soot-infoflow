@@ -9,7 +9,6 @@ import soot.jimple.infoflow.test.utilclasses.ClassWithFinal;
 
 /**
  * tests array tainting
- * @author Christian
  *
  */
 public class ArrayTestCode {

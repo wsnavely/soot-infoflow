@@ -26,7 +26,6 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 
 	/**
 	 * Supported methods for tracking data flow paths through applications
-	 * @author sarzt
 	 *
 	 */
 	public enum PathTrackingMethod {

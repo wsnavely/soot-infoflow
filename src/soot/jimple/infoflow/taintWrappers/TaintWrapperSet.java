@@ -14,7 +14,6 @@ import soot.jimple.Stmt;
  * of the contained wrappers supports it. The resulting taints are the union of
  * all taints produced by the contained wrappers.
  * 
- * @author Steven Arzt
  */
 public class TaintWrapperSet implements ITaintPropagationWrapper {
 

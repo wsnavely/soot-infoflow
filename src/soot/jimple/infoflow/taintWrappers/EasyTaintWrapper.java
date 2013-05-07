@@ -25,7 +25,6 @@ import soot.jimple.internal.JAssignStmt;
  * For static methods, only the return value is assumed to be tainted when
  * the method is called with a tainted parameter value.
  * 
- * @author Christian
  *
  */
 public class EasyTaintWrapper implements ITaintPropagationWrapper {
