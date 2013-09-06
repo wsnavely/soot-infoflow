@@ -40,6 +40,7 @@ import soot.jimple.ReturnStmt;
 import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
 import soot.jimple.infoflow.data.Abstraction;
+import soot.jimple.infoflow.heros.BackwardsInfoflowCFG;
 import soot.jimple.infoflow.heros.InfoflowSolver;
 import soot.jimple.infoflow.taintWrappers.ITaintPropagationWrapper;
 import soot.jimple.infoflow.util.BaseSelector;
@@ -60,7 +61,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 	}
 
 	public BackwardsInfoflowProblem() {
-		super(new BackwardsInterproceduralCFG());
+		super(new BackwardsInfoflowCFG());
 	}
 
 	public void setForwardSolver(InfoflowSolver forwardSolver) {
@@ -81,7 +82,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						public Set<Abstraction> computeTargets(Abstraction source) {
 							IdentityStmt iStmt = (IdentityStmt) src;
 							if(iStmt.getLeftOp().equals(source.getAccessPath().getPlainValue())){
-								for (Unit u : ((BackwardsInterproceduralCFG) interproceduralCFG()).getPredsOf(src))
+								for (Unit u : ((BackwardsInfoflowCFG) interproceduralCFG()).getPredsOf(src))
 									fSolver.processEdge(new PathEdge<Unit, Abstraction>
 										(source.getAbstractionFromCallEdge(), u, source));
 								return Collections.emptySet();
@@ -128,7 +129,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 								// all taint propagations must be below that point, so this is the
 								// right point to turn around.
 								if (triggerInaktiveTaintOrReverseFlow(leftValue, source))
-									for (Unit u : ((BackwardsInterproceduralCFG) interproceduralCFG()).getPredsOf(src))
+									for (Unit u : ((BackwardsInfoflowCFG) interproceduralCFG()).getPredsOf(src))
 										fSolver.processEdge(new PathEdge<Unit, Abstraction>(source.getAbstractionFromCallEdge(), u, source));
 
 								// Termination shortcut: If the right side is a value we do not track,
@@ -232,7 +233,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 								// $r1 = l0.<java.lang.AbstractStringBuilder: char[] value>
 								if (newAbs.getAccessPath().isStaticFieldRef()
 										|| triggerInaktiveTaintOrReverseFlow(newAbs.getAccessPath().getPlainValue(), newAbs)) {
-									for (Unit u : ((BackwardsInterproceduralCFG) interproceduralCFG()).getPredsOf(src)){
+									for (Unit u : ((BackwardsInfoflowCFG) interproceduralCFG()).getPredsOf(src)){
 										fSolver.processEdge(new PathEdge<Unit, Abstraction>(source.getAbstractionFromCallEdge(), u, newAbs));
 									}
 								}
@@ -352,7 +353,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							if (iStmt instanceof DefinitionStmt && ((DefinitionStmt) iStmt).getLeftOp().equals
 									(source.getAccessPath().getPlainValue())){
 								//terminates here, but we have to start a forward pass to consider all method calls:
-								for (Unit u : ((BackwardsInterproceduralCFG) interproceduralCFG()).getPredsOf(iStmt))
+								for (Unit u : ((BackwardsInfoflowCFG) interproceduralCFG()).getPredsOf(iStmt))
 									fSolver.processEdge(new PathEdge<Unit, Abstraction>(source.getAbstractionFromCallEdge(), u, source));
 							}else{
 								res.add(source);

@@ -37,6 +37,13 @@ public class AccessPath implements Cloneable {
 	private final SootField[] fields;
 	private int hashCode = 0;
 
+	private static AccessPath emptyAccessPath = new AccessPath();
+	
+	private AccessPath() {
+		this.value = null;
+		this.fields = null;
+	}
+	
 	public AccessPath(Value val){
 		this(val, (SootField[]) null);
 	}
@@ -203,5 +210,9 @@ public class AccessPath implements Cloneable {
 		assert a.equals(this);
 		return a;
 	}
-
+	
+	public static AccessPath getEmptyAccessPath() {
+		return emptyAccessPath;
+	}
+	
 }

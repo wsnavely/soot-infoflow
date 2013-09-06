@@ -11,10 +11,14 @@
 package soot.jimple.infoflow.data;
 
 
+import java.util.Stack;
+
 import soot.SootField;
+import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
 import soot.jimple.Stmt;
+import soot.jimple.infoflow.heros.InfoflowCFG.UnitContainer;
 /**
  * the abstraction class contains all information that is necessary to track the taint.
  *
@@ -54,6 +58,8 @@ public class Abstraction implements Cloneable {
 	 */
 	private Abstraction abstractionFromCallEdge;
 	private Abstraction zeroAbstraction;
+	
+	private final Stack<UnitContainer> postdominators = new Stack<UnitContainer>(); 
 
 	public Abstraction(Value taint, Value src, Stmt srcContext, boolean exceptionThrown, boolean isActive, Unit activationUnit){
 		this.source = src;
@@ -90,6 +96,8 @@ public class Abstraction implements Cloneable {
 	 * @param original The original abstraction to copy
 	 */
 	protected Abstraction(AccessPath p, Abstraction original){
+		assert p != null;
+		
 		if (original == null) {
 			source = null;
 			sourceContext = null;
@@ -108,6 +116,7 @@ public class Abstraction implements Cloneable {
 			abstractionFromCallEdge = original.abstractionFromCallEdge;
 			zeroAbstraction = original.zeroAbstraction;
 			isActive = original.isActive;
+			postdominators.addAll(original.postdominators);
 		}
 		accessPath = p.clone();
 	}
@@ -182,6 +191,44 @@ public class Abstraction implements Cloneable {
 		if(isActive)
 			abs.activationUnit = newActivationUnit;
 		return abs;
+	}
+	
+	public final Abstraction deriveConditionalAbstractionEnter(UnitContainer postdom) {
+		if (!postdominators.isEmpty() && postdominators.contains(postdom))
+			return this;
+		
+		Abstraction abs = clone();
+		abs.postdominators.push(postdom);
+		return abs;
+	}
+	
+	public final Abstraction dropTopPostdominator() {
+		if (postdominators.isEmpty())
+			return this;
+		
+		Abstraction abs = clone();
+		abs.postdominators.pop();
+		return abs;
+	}
+	
+	public UnitContainer getTopPostdominator() {
+		if (this.postdominators.isEmpty())
+			return null;
+		return this.postdominators.peek();
+	}
+	
+	public boolean isTopPostdominator(Unit u) {
+		UnitContainer uc = getTopPostdominator();
+		if (uc == null)
+			return false;
+		return uc.getUnit() == u;
+	}
+
+	public boolean isTopPostdominator(SootMethod sm) {
+		UnitContainer uc = getTopPostdominator();
+		if (uc == null)
+			return false;
+		return uc.getMethod() == sm;
 	}
 
 	public Value getSource() {
@@ -335,6 +382,8 @@ public class Abstraction implements Cloneable {
 			return false;
 		if(this.isActive != other.isActive)
 			return false;
+		if(!this.postdominators.equals(other.postdominators))
+			return false;
 		return true;
 	}
 	
@@ -351,6 +400,7 @@ public class Abstraction implements Cloneable {
 			this.hashCode = prime * this.hashCode + (exceptionThrown ? 1231 : 1237);
 			this.hashCode = prime * this.hashCode + ((zeroAbstraction == null) ? 0 : zeroAbstraction.hashCode());
 			this.hashCode = prime * this.hashCode + (isActive ? 1231 : 1237);
+			this.hashCode = prime * this.hashCode + postdominators.hashCode();
 		}
 		return hashCode;
 	}
