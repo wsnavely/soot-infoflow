@@ -215,4 +215,8 @@ public class AccessPath implements Cloneable {
 		return emptyAccessPath;
 	}
 	
+	public boolean isEmpty() {
+		return value == null && (fields == null || fields.length == 0);
+	}
+	
 }

@@ -62,6 +62,8 @@ public class ImplicitFlowTests extends JUnitTests {
 
 	@Test
 	public void convertTest(){
+		long timeBefore = System.nanoTime();
+    	System.out.println("Starting convertTest...");
     	Infoflow infoflow = initInfoflow();
 
     	int oldAPLength = Infoflow.getAccessPathLength();
@@ -74,6 +76,7 @@ public class ImplicitFlowTests extends JUnitTests {
 		checkInfoflow(infoflow, 1);	
 
 		infoflow.setAccessPathLength(oldAPLength);	// this is a global setting! Restore it when we're done
+		System.out.println("convertTest took " + (System.nanoTime() - timeBefore) / 1E9 + " seconds");
 	}
 
 	@Test
@@ -192,6 +195,16 @@ public class ImplicitFlowTests extends JUnitTests {
 		infoflow.setInspectSinks(false);
 	    List<String> epoints = new ArrayList<String>();
 	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void staticFieldTest()>");
+		infoflow.computeInfoflow(path, epoints,sources, sinks);
+		checkInfoflow(infoflow, 1);	
+	}
+
+	@Test
+	public void integerClassTest(){
+		Infoflow infoflow = initInfoflow();
+		infoflow.setInspectSinks(false);
+	    List<String> epoints = new ArrayList<String>();
+	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void integerClassTest()>");
 		infoflow.computeInfoflow(path, epoints,sources, sinks);
 		checkInfoflow(infoflow, 1);	
 	}

@@ -75,9 +75,12 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 	private Set<Abstraction> computeWrapperTaints
 			(final Stmt iStmt,
 			Abstraction source) {
-		Set<Abstraction> res = new HashSet<Abstraction>();
 		if(taintWrapper == null)
 			return Collections.emptySet();
+		if (source.getAccessPath().isEmpty())
+			return Collections.emptySet();		
+		
+		Set<Abstraction> res = new HashSet<Abstraction>();
 		
 		if (!source.getAccessPath().isStaticFieldRef())
 			if(iStmt.getInvokeExpr() instanceof InstanceInvokeExpr) {
@@ -679,7 +682,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							for (Unit predUnit : interproceduralCFG().getPredsOf(callSite))
 								bSolver.processEdge(new PathEdge<Unit, Abstraction>(bwAbs, predUnit, bwAbs));
 						}
-						
+					
 						// checks: this/params/fields
 
 						// check one of the call params are tainted (not if simple type)

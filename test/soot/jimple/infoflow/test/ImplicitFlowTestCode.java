@@ -191,4 +191,11 @@ public class ImplicitFlowTestCode {
 		cm.publish(staticVal);
 	}
 
+	public void integerClassTest() {
+		int secret = TelephonyManager.getIMEI();
+		Integer i = new Integer(secret);
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(i);
+	}
+
 }
