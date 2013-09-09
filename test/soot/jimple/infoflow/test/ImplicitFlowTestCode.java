@@ -113,5 +113,82 @@ public class ImplicitFlowTestCode {
 		if (secret == 42)
 			other = 1;
 	}
+	
+	private void runSimpleRecursion(int i) {
+		if (i == 0)
+			doPublish();
+		else runSimpleRecursion(i - 1);
+	}
+	
+	public void recursionTest() {
+		int secret = TelephonyManager.getIMEI();
+		if (secret == 42)
+			runSimpleRecursion(42);
+	}
+
+	public void recursionTest2() {
+		int secret = TelephonyManager.getIMEI();
+		runSimpleRecursion(secret);
+	}
+	
+	public void exceptionTest() {
+		String tainted = TelephonyManager.getDeviceId();
+		try {
+			if (tainted == "123")
+				throw new RuntimeException("Secret is 42");
+		}
+		catch (RuntimeException ex) {
+			doPublish();
+		}
+	}
+
+	public void exceptionTest2() {
+		String tainted = TelephonyManager.getDeviceId();
+		try {
+			if (tainted == "123")
+				throw new RuntimeException("Secret is 42");
+		}
+		catch (RuntimeException ex) {
+			ConnectionManager cm = new ConnectionManager();
+			cm.publish(ex.getMessage());
+		}
+	}
+
+	public void exceptionTest3() {
+		String tainted = TelephonyManager.getDeviceId();
+		Throwable t = null;
+		if (tainted == "123")
+			t = new Throwable();
+		if (t != null)
+			doPublish();
+	}
+	
+	private int val = 0;
+	
+	private void fieldAccess() {
+		this.val = 3;
+	}
+	
+	public void fieldTest() {
+		int secret = TelephonyManager.getIMEI();
+		if (secret == 42)
+			fieldAccess();
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(val);
+	}
+	
+	private static int staticVal = 0;
+	
+	private void staticFieldAccess() {
+		staticVal = 42;
+	}
+
+	public void staticFieldTest() {
+		int secret = TelephonyManager.getIMEI();
+		if (secret == 42)
+			staticFieldAccess();
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(staticVal);
+	}
 
 }

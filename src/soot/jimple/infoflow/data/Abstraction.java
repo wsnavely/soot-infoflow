@@ -118,7 +118,8 @@ public class Abstraction implements Cloneable {
 			isActive = original.isActive;
 			postdominators.addAll(original.postdominators);
 		}
-		accessPath = p.clone();
+//		accessPath = p.clone();
+		accessPath = p;
 	}
 	
 	public final Abstraction deriveInactiveAbstraction(){
@@ -156,9 +157,14 @@ public class Abstraction implements Cloneable {
 	public final Abstraction deriveNewAbstraction(Value taint, boolean cutFirstField, Unit newActUnit, boolean isActive){
 		Abstraction a;
 		SootField[] orgFields = accessPath.getFields();
-		SootField[] fields = new SootField[cutFirstField ? orgFields.length - 1 : orgFields.length];
-		for (int i = cutFirstField ? 1 : 0; i < orgFields.length; i++)
-			fields[cutFirstField ? i - 1 : i] = orgFields[i];
+		SootField[] fields;
+		if (orgFields == null)
+			fields = null;
+		else {
+			fields = new SootField[cutFirstField ? orgFields.length - 1 : orgFields.length];
+			for (int i = cutFirstField ? 1 : 0; i < orgFields.length; i++)
+				fields[cutFirstField ? i - 1 : i] = orgFields[i];
+		}
 		a = deriveNewAbstraction(new AccessPath(taint, fields));
 		a.isActive = isActive;
 		if (isActive)

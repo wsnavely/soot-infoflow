@@ -24,6 +24,7 @@ import soot.Unit;
 import soot.Value;
 import soot.jimple.ArrayRef;
 import soot.jimple.Constant;
+import soot.jimple.FieldRef;
 import soot.jimple.InstanceFieldRef;
 import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AbstractionWithPath;
@@ -212,6 +213,12 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 		if(val == null){
 			return false;
 		}
+		
+		// Do not trigger a backwards analysis on an empty access path
+		// (method called inside a secret-depending conditional)
+		if (source.getAccessPath().getPlainValue() == null && source.getAccessPath().getFirstField() == null)
+			return false;
+		
 		//no string
 		if(!(val instanceof InstanceFieldRef) && !(val instanceof ArrayRef) 
 				&& val.getType() instanceof RefType && ((RefType)val.getType()).getClassName().equals("java.lang.String")){
@@ -227,12 +234,16 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 		if(val instanceof Constant)
 			return false;
 		
+		return (val instanceof FieldRef || val instanceof ArrayRef);
+		
+		/*
 		 if(DataTypeHandler.isFieldRefOrArrayRef(val) ||
 				source.getAccessPath().isInstanceFieldRef() ||
 				source.getAccessPath().isStaticFieldRef()){
 			return true;
 		}
 		return false;
+		*/
 	}
 	
 	@Override

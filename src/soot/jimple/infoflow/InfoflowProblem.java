@@ -36,6 +36,7 @@ import soot.jimple.AssignStmt;
 import soot.jimple.CaughtExceptionRef;
 import soot.jimple.Constant;
 import soot.jimple.DefinitionStmt;
+import soot.jimple.FieldRef;
 import soot.jimple.IdentityStmt;
 import soot.jimple.IfStmt;
 import soot.jimple.InstanceFieldRef;
@@ -221,7 +222,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 					return new FlowFunction<Abstraction>() {
 
-						 @Override
+						@Override
 						public Set<Abstraction> computeTargets(Abstraction source) {
 							if (stopAfterFirstFlow && !results.isEmpty())
 								return Collections.emptySet();
@@ -240,18 +241,25 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							if (source.isTopPostdominator(assignStmt))
 								source = source.dropTopPostdominator();
 							
-							// If we have a non-empty postdominator stack, we taint
-							// every assignment target
-							if (source.getTopPostdominator() != null)
-								addLeftValue = true;
-							
 							Abstraction newSource;
 							if (!source.isAbstractionActive() && (src.equals(source.getActivationUnit()) || src.equals(source.getActivationUnitOnCurrentLevel()))){
 								newSource = source.getActiveCopy(false);
 							}else{
 								newSource = source;
 							}
-							
+
+							// If we have a non-empty postdominator stack, we taint
+							// every assignment target
+							if (newSource.getTopPostdominator() != null) {
+								// We can skip over all local assignments in conditional calls
+								// since they are not visible in the caller anyway
+								if (newSource.getAccessPath().getFirstField() == null
+										&& source.getAccessPath().getPlainValue() == null
+										&& !(leftValue instanceof FieldRef))
+									return Collections.singleton(newSource);
+								addLeftValue = true;
+							}
+														
 							for (Value rightValue : rightVals) {
 								// check if static variable is tainted (same name, same class)
 								//y = X.f && X.f tainted --> y, X.f tainted
@@ -433,9 +441,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								source = source.dropTopPostdominator();
 
 							Set<Value> values = new HashSet<Value>();
-							values.add(condition);
-							for (ValueBox box : condition.getUseBoxes())
-								values.add(box.getValue());
+							if (condition instanceof Local)
+								values.add(condition);
+							else
+								for (ValueBox box : condition.getUseBoxes())
+									values.add(box.getValue());
 							
 							for (Value val : values)
 								if (val.equals(source.getAccessPath().getPlainValue())) {
@@ -443,7 +453,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 									// We now need the postdominator to know when we leave the
 									// branch again.
 									UnitContainer postdom = interproceduralCFG().getPostdominatorOf(src);
-									Abstraction newAbs = source.deriveConditionalAbstractionEnter(postdom);								
+									Abstraction newAbs = source.deriveConditionalAbstractionEnter(postdom);
 									return Collections.singleton(newAbs);
 								}
 							return Collections.singleton(source);
