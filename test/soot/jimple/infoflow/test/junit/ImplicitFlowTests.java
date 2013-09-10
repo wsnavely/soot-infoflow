@@ -209,4 +209,23 @@ public class ImplicitFlowTests extends JUnitTests {
 		checkInfoflow(infoflow, 1);	
 	}
 
+	@Test
+	public void stringClassTest(){
+		long timeBefore = System.nanoTime();
+    	System.out.println("Starting stringClassTest...");
+    	Infoflow infoflow = initInfoflow();
+    	
+    	int oldAPLength = Infoflow.getAccessPathLength();
+    	infoflow.setAccessPathLength(1);
+		infoflow.setInspectSinks(false);
+
+		List<String> epoints = new ArrayList<String>();
+	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void stringClassTest()>");
+		infoflow.computeInfoflow(path, epoints,sources, sinks);
+		checkInfoflow(infoflow, 1);	
+
+		infoflow.setAccessPathLength(oldAPLength);	// this is a global setting! Restore it when we're done
+		System.out.println("stringClassTest took " + (System.nanoTime() - timeBefore) / 1E9 + " seconds");
+	}
+
 }

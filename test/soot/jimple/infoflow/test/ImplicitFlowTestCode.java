@@ -192,10 +192,24 @@ public class ImplicitFlowTestCode {
 	}
 
 	public void integerClassTest() {
+		// Not an implicit flow, but used to produce a hickup with implicit
+		// flows enabled
 		int secret = TelephonyManager.getIMEI();
 		Integer i = new Integer(secret);
 		ConnectionManager cm = new ConnectionManager();
 		cm.publish(i);
+	}
+
+	public void stringClassTest() {
+		// Not an implicit flow, but used to produce a hickup with implicit
+		// flows enabled
+		String secret = TelephonyManager.getDeviceId();
+		int len = secret.length();
+		char[] secret2 = new char[len];
+		secret.getChars(0, len, secret2, 0);
+		ConnectionManager cm = new ConnectionManager();
+		//cm.publish(new String(secret2));
+		cm.publish(new String(secret));
 	}
 
 }

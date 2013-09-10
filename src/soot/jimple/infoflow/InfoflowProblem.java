@@ -148,7 +148,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					baseTarget = ((ArrayRef) targetValue).getBase();
 
 				// also taint the target of the assignment
-				Abstraction newAbs = source.deriveNewAbstraction(baseTarget, cutFirstField, src);
+				Abstraction newAbs;
+				if (source.getTopPostdominator() == null)
+					newAbs = source.deriveNewAbstraction(baseTarget, cutFirstField, src);
+				else
+					newAbs = source.deriveNewAbstraction(targetValue, src);
 				if (pathTracking == PathTrackingMethod.ForwardTracking)
 					((AbstractionWithPath) newAbs).addPathElement(src);
 				taintSet.add(newAbs);
@@ -182,7 +186,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							// Check whether we must leave a conditional branch
 							if (source.isTopPostdominator(is))
 								source = source.dropTopPostdominator();
-
+							
 							Set<Abstraction> res = new HashSet<Abstraction>();
 							boolean addOriginal = true;
 							if (is.getRightOp() instanceof CaughtExceptionRef) {
@@ -236,9 +240,8 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							
 							// shortcuts:
 							// on NormalFlow taint cannot be created
-							if (source.equals(zeroValue)) {
+							if (source.equals(zeroValue))
 								return Collections.emptySet();
-							}
 							
 							// Check whether we must leave a conditional branch
 							if (source.isTopPostdominator(assignStmt))
@@ -254,15 +257,18 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							// If we have a non-empty postdominator stack, we taint
 							// every assignment target
 							if (newSource.getTopPostdominator() != null) {
-								// We can skip over all local assignments in conditional calls
-								// since they are not visible in the caller anyway
-								if (newSource.getAccessPath().getFirstField() == null
-										&& source.getAccessPath().getPlainValue() == null
-										&& !(leftValue instanceof FieldRef))
+								SootMethod sm = interproceduralCFG().getMethodOf(src);
+								// We can skip over all local assignments inside conditionally-
+								// called functions since they are not visible in the caller
+								// anyway
+								if (newSource.getAccessPath().isEmpty() && !(leftValue instanceof FieldRef))
 									return Collections.singleton(newSource);
 								addLeftValue = true;
+
+								if (newSource.getAccessPath().isEmpty())
+									System.out.println("x");
 							}
-														
+							
 							for (Value rightValue : rightVals) {
 								// check if static variable is tainted (same name, same class)
 								//y = X.f && X.f tainted --> y, X.f tainted
@@ -442,13 +448,16 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							// Check whether we must leave a conditional branch
 							if (source.isTopPostdominator(src))
 								source = source.dropTopPostdominator();
-
+							
 							Set<Value> values = new HashSet<Value>();
 							if (condition instanceof Local)
 								values.add(condition);
 							else
 								for (ValueBox box : condition.getUseBoxes())
 									values.add(box.getValue());
+							
+							Set<Abstraction> res = new HashSet<Abstraction>();
+							res.add(source);
 							
 							for (Value val : values)
 								if (val.equals(source.getAccessPath().getPlainValue())) {
@@ -457,9 +466,9 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 									// branch again.
 									UnitContainer postdom = interproceduralCFG().getPostdominatorOf(src);
 									Abstraction newAbs = source.deriveConditionalAbstractionEnter(postdom);
-									return Collections.singleton(newAbs);
+									res.add(newAbs);
 								}
-							return Collections.singleton(source);
+							return res;
 						}
 					};
 				}
@@ -511,7 +520,17 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							newSource = source;
 						}
 						
+						// If no parameter is tainted, but we are in a conditional, we create a
+						// pseudo abstraction. We do not map parameters if we are handling an
+						// implicit flow anyway.
+						if (source.getTopPostdominator() != null) {
+							Abstraction abs = source.deriveNewAbstraction(AccessPath.getEmptyAccessPath());
+							abs.setAbstractionFromCallEdge(abs.clone());
+							return Collections.singleton(abs);
+						}
+
 						Set<Abstraction> res = new HashSet<Abstraction>();
+
 						// check if whole object is tainted (happens with strings, for example:)
 						if (!dest.isStatic() && ie instanceof InstanceInvokeExpr) {
 							InstanceInvokeExpr vie = (InstanceInvokeExpr) ie;
@@ -555,15 +574,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							abs.setAbstractionFromCallEdge(abs.clone());
 							res.add(abs);
 						}
-						
-						// If no parameter is tainted, but we are in a conditional, we create a
-						// pseudo abstraction
-						if (res.isEmpty() && source.getTopPostdominator() != null) {
-							Abstraction abs = source.deriveNewAbstraction(AccessPath.getEmptyAccessPath());
-							abs.setAbstractionFromCallEdge(abs.clone());
-							res.add(abs);
-						}
-						
+												
 						return res;
 					}
 				};
@@ -590,7 +601,6 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								newSource = source.getActiveCopy(true);
 							}else{
 								newSource = source.cloneUsePredAbstractionOfCG();
-								
 							}
 						}else{
 							newSource = source.cloneUsePredAbstractionOfCG();
@@ -600,6 +610,9 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						boolean insideConditional = false;
 						if (newSource.isTopPostdominator(exitStmt) || newSource.isTopPostdominator(callee)) {
 							newSource = newSource.dropTopPostdominator();
+							// Have we dropped the last postdominator for an empty taint?
+							if (newSource.getAccessPath().isEmpty() && newSource.getTopPostdominator() == null)
+								return Collections.emptySet();
 							insideConditional = true;
 						}
 
@@ -836,7 +849,16 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 							// if we have called a sink we have to store the path from the source - in case one of the params is tainted!
 							if (sourceSinkManager.isSink(iStmt, interproceduralCFG())) {
+								// If we are inside a conditional branch, we consider every sink call a leak
 								boolean taintedParam = source.getTopPostdominator() != null;
+								// If the base object is tainted, we also consider the "code" associated
+								// with the object's class as tainted.
+								if (!taintedParam) {
+									SootMethod meth = interproceduralCFG().getMethodOf(iStmt);
+									if (!meth.isStatic() && meth.getActiveBody().getThisLocal().equals
+											(source.getAccessPath().getPlainValue()))
+										taintedParam = true;
+								}
 								
 								if (!taintedParam)
 									for (int i = 0; i < callArgs.size(); i++) {

@@ -118,7 +118,6 @@ public class Abstraction implements Cloneable {
 			isActive = original.isActive;
 			postdominators.addAll(original.postdominators);
 		}
-//		accessPath = p.clone();
 		accessPath = p;
 	}
 	

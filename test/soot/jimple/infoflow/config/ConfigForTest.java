@@ -36,9 +36,14 @@ public class ConfigForTest implements IInfoflowConfig{
 		includeList.add("com.example.");
 		includeList.add("libcore.icu.");
 		includeList.add("securibench.");
+		
+		List<String> excludeList = new LinkedList<String>();
+		excludeList.add("java.lang.StringIndexOutOfBoundsException");
+
 		Options.v().set_no_bodies_for_excluded(true);
 		Options.v().set_allow_phantom_refs(true);
 		options.set_include(includeList);
+		options.set_exclude(excludeList);
 		options.set_output_format(Options.output_format_none);
 		Options.v().setPhaseOption("jb", "use-original-names:true");
 		
