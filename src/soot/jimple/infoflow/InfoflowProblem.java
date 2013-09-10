@@ -268,55 +268,56 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								if (newSource.getAccessPath().isEmpty())
 									System.out.println("x");
 							}
-							
-							for (Value rightValue : rightVals) {
-								// check if static variable is tainted (same name, same class)
-								//y = X.f && X.f tainted --> y, X.f tainted
-								if (newSource.getAccessPath().isStaticFieldRef() && rightValue instanceof StaticFieldRef) {
-									StaticFieldRef rightRef = (StaticFieldRef) rightValue;
-									if (newSource.getAccessPath().getFirstField().equals(rightRef.getField())) {
-										addLeftValue = true;
-										cutFirstField = true;
-									}
-								}
-								// if both are fields, we have to compare their fieldName via equals and their bases
-								//y = x.f && x tainted --> y, x tainted
-								//y = x.f && x.f tainted --> y, x tainted
-								else if (rightValue instanceof InstanceFieldRef) {								
-									InstanceFieldRef rightRef = (InstanceFieldRef) rightValue;
-									Local rightBase = (Local) rightRef.getBase();
-									Local sourceBase =  newSource.getAccessPath().getPlainLocal();
-									if (rightBase.equals(sourceBase)) {
-										if (newSource.getAccessPath().isInstanceFieldRef()) {
-											if (rightRef.getField().equals(newSource.getAccessPath().getFirstField())) {
-												addLeftValue = true;
-												cutFirstField = true;
-											}
+							else {
+								for (Value rightValue : rightVals) {
+									// check if static variable is tainted (same name, same class)
+									//y = X.f && X.f tainted --> y, X.f tainted
+									if (newSource.getAccessPath().isStaticFieldRef() && rightValue instanceof StaticFieldRef) {
+										StaticFieldRef rightRef = (StaticFieldRef) rightValue;
+										if (newSource.getAccessPath().getFirstField().equals(rightRef.getField())) {
+											addLeftValue = true;
+											cutFirstField = true;
 										}
-										else
+									}
+									// if both are fields, we have to compare their fieldName via equals and their bases
+									//y = x.f && x tainted --> y, x tainted
+									//y = x.f && x.f tainted --> y, x tainted
+									else if (rightValue instanceof InstanceFieldRef) {								
+										InstanceFieldRef rightRef = (InstanceFieldRef) rightValue;
+										Local rightBase = (Local) rightRef.getBase();
+										Local sourceBase =  newSource.getAccessPath().getPlainLocal();
+										if (rightBase.equals(sourceBase)) {
+											if (newSource.getAccessPath().isInstanceFieldRef()) {
+												if (rightRef.getField().equals(newSource.getAccessPath().getFirstField())) {
+													addLeftValue = true;
+													cutFirstField = true;
+												}
+											}
+											else
+												addLeftValue = true;
+										}
+									}
+									// indirect taint propagation:
+									// if rightvalue is local and source is instancefield of this local:
+									// y = x && x.f tainted --> y.f, x.f tainted
+									// y.g = x && x.f tainted --> y.g.f, x.f tainted
+									else if (rightValue instanceof Local && newSource.getAccessPath().isInstanceFieldRef()) {
+										Local base = newSource.getAccessPath().getPlainLocal();
+										if (rightValue.equals(base)) {
+											addLeftValue = true;
+										}
+									}
+									//y = x[i] && x tainted -> x, y tainted
+									else if (rightValue instanceof ArrayRef) {
+										Local rightBase = (Local) ((ArrayRef) rightValue).getBase();
+										if (rightBase.equals(newSource.getAccessPath().getPlainValue()))
 											addLeftValue = true;
 									}
-								}
-								// indirect taint propagation:
-								// if rightvalue is local and source is instancefield of this local:
-								// y = x && x.f tainted --> y.f, x.f tainted
-								// y.g = x && x.f tainted --> y.g.f, x.f tainted
-								else if (rightValue instanceof Local && newSource.getAccessPath().isInstanceFieldRef()) {
-									Local base = newSource.getAccessPath().getPlainLocal();
-									if (rightValue.equals(base)) {
+									// generic case, is true for Locals, ArrayRefs that are equal etc..
+									//y = x && x tainted --> y, x tainted
+									else if (rightValue.equals(newSource.getAccessPath().getPlainValue())) {
 										addLeftValue = true;
 									}
-								}
-								//y = x[i] && x tainted -> x, y tainted
-								else if (rightValue instanceof ArrayRef) {
-									Local rightBase = (Local) ((ArrayRef) rightValue).getBase();
-									if (rightBase.equals(newSource.getAccessPath().getPlainValue()))
-										addLeftValue = true;
-								}
-								// generic case, is true for Locals, ArrayRefs that are equal etc..
-								//y = x && x tainted --> y, x tainted
-								else if (rightValue.equals(newSource.getAccessPath().getPlainValue())) {
-									addLeftValue = true;
 								}
 							}
 
