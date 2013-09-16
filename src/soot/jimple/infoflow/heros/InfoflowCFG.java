@@ -10,8 +10,21 @@ import soot.toolkits.graph.MHGPostDominatorsFinder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
+/**
+ * Interprocedural control-flow graph for the infoflow solver
+ * 
+ * @author Steven Arzt
+ */
 public class InfoflowCFG extends JimpleBasedBiDiICFG {
 
+	/**
+	 * Abstraction of a postdominator. This is normally a unit. In cases in which
+	 * a statement does not have a postdominator, we record the statement's
+	 * containing method and say that the postdominator is reached when the method
+	 * is left. This class MUST be immutable.
+	 * 
+	 * @author Steven Arzt
+	 */
 	public class UnitContainer {
 		
 		private final Unit unit;
@@ -35,7 +48,7 @@ public class InfoflowCFG extends JimpleBasedBiDiICFG {
 		
 		@Override
 		public boolean equals(Object other) {
-			if ((other == null) || !(other instanceof UnitContainer))
+			if (other == null || !(other instanceof UnitContainer))
 				return false;
 			UnitContainer container = (UnitContainer) other;
 			if (this.unit == null) {
@@ -52,6 +65,8 @@ public class InfoflowCFG extends JimpleBasedBiDiICFG {
 			else
 				if (!this.method.equals(container.method))
 					return false;
+			
+			assert this.hashCode() == container.hashCode();
 			return true;
 		}
 
@@ -61,6 +76,14 @@ public class InfoflowCFG extends JimpleBasedBiDiICFG {
 		
 		public SootMethod getMethod() {
 			return method;
+		}
+		
+		@Override
+		public String toString() {
+			if (method != null)
+				return "(Method) " + method.toString();
+			else
+				return "(Unit) " + unit.toString();
 		}
 		
 	}

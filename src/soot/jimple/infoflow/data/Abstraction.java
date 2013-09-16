@@ -59,7 +59,8 @@ public class Abstraction implements Cloneable {
 	private Abstraction abstractionFromCallEdge;
 	private Abstraction zeroAbstraction;
 	
-	private final Stack<UnitContainer> postdominators = new Stack<UnitContainer>(); 
+	private final Stack<UnitContainer> postdominators = new Stack<UnitContainer>();
+	private Unit conditionalCallSite = null;
 
 	public Abstraction(Value taint, Value src, Stmt srcContext, boolean exceptionThrown, boolean isActive, Unit activationUnit){
 		this.source = src;
@@ -117,6 +118,8 @@ public class Abstraction implements Cloneable {
 			zeroAbstraction = original.zeroAbstraction;
 			isActive = original.isActive;
 			postdominators.addAll(original.postdominators);
+			assert this.postdominators.equals(original.postdominators);
+			conditionalCallSite = original.conditionalCallSite;
 		}
 		accessPath = p;
 	}
@@ -129,7 +132,8 @@ public class Abstraction implements Cloneable {
 	
 	//should be only called by call-/returnFunctions!
 	public Abstraction deriveNewAbstraction(AccessPath p){
-		return new Abstraction(p, this);
+		Abstraction a = new Abstraction(p, this);
+		return a;
 	}
 	
 	public final Abstraction deriveNewAbstraction(AccessPath p, Unit newActUnit){
@@ -207,6 +211,19 @@ public class Abstraction implements Cloneable {
 		return abs;
 	}
 	
+	public final Abstraction deriveConditionalAbstractionCall(Unit conditionalCallSite) {
+		Abstraction abs = deriveNewAbstraction(AccessPath.getEmptyAccessPath());
+		if (abs.conditionalCallSite == null)
+			abs.conditionalCallSite = conditionalCallSite;
+		return abs;
+	}
+	
+	public final Abstraction leaveConditionalCall() {
+		Abstraction abs = clone();
+		abs.conditionalCallSite = null;
+		return abs;
+	}
+
 	public final Abstraction dropTopPostdominator() {
 		if (postdominators.isEmpty())
 			return this;
@@ -234,6 +251,10 @@ public class Abstraction implements Cloneable {
 		if (uc == null)
 			return false;
 		return uc.getMethod() == sm;
+	}
+	
+	public Unit getConditionalCallSite() {
+		return this.conditionalCallSite;
 	}
 
 	public Value getSource() {
@@ -389,6 +410,11 @@ public class Abstraction implements Cloneable {
 			return false;
 		if(!this.postdominators.equals(other.postdominators))
 			return false;
+		if (conditionalCallSite == null) {
+			if (other.conditionalCallSite != null)
+				return false;
+		} else if (!conditionalCallSite.equals(other.conditionalCallSite))
+			return false;
 		return true;
 	}
 	
@@ -406,6 +432,7 @@ public class Abstraction implements Cloneable {
 			this.hashCode = prime * this.hashCode + ((zeroAbstraction == null) ? 0 : zeroAbstraction.hashCode());
 			this.hashCode = prime * this.hashCode + (isActive ? 1231 : 1237);
 			this.hashCode = prime * this.hashCode + postdominators.hashCode();
+			this.hashCode = prime * this.hashCode + ((conditionalCallSite == null) ? 0 : conditionalCallSite.hashCode());
 		}
 		return hashCode;
 	}

@@ -150,6 +150,16 @@ public class ImplicitFlowTests extends JUnitTests {
 	}
 
 	@Test
+	public void recursionTest3(){
+		Infoflow infoflow = initInfoflow();
+		infoflow.setInspectSinks(false);
+	    List<String> epoints = new ArrayList<String>();
+	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void recursionTest3()>");
+		infoflow.computeInfoflow(path, epoints,sources, sinks);
+		checkInfoflow(infoflow, 1);	
+	}
+
+	@Test
 	public void exceptionTest(){
 		Infoflow infoflow = initInfoflow();
 		infoflow.setInspectSinks(false);
@@ -195,6 +205,26 @@ public class ImplicitFlowTests extends JUnitTests {
 		infoflow.setInspectSinks(false);
 	    List<String> epoints = new ArrayList<String>();
 	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void staticFieldTest()>");
+		infoflow.computeInfoflow(path, epoints,sources, sinks);
+		checkInfoflow(infoflow, 1);	
+	}
+
+	@Test
+	public void staticFieldTest2(){
+		Infoflow infoflow = initInfoflow();
+		infoflow.setInspectSinks(false);
+	    List<String> epoints = new ArrayList<String>();
+	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void staticFieldTest2()>");
+		infoflow.computeInfoflow(path, epoints,sources, sinks);
+		checkInfoflow(infoflow, 1);	
+	}
+
+	@Test
+	public void staticFieldTest3(){
+		Infoflow infoflow = initInfoflow();
+		infoflow.setInspectSinks(false);
+	    List<String> epoints = new ArrayList<String>();
+	    epoints.add("<soot.jimple.infoflow.test.ImplicitFlowTestCode: void staticFieldTest3()>");
 		infoflow.computeInfoflow(path, epoints,sources, sinks);
 		checkInfoflow(infoflow, 1);	
 	}

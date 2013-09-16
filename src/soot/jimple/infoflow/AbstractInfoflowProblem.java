@@ -22,9 +22,7 @@ import soot.RefType;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
-import soot.jimple.ArrayRef;
 import soot.jimple.Constant;
-import soot.jimple.FieldRef;
 import soot.jimple.InstanceFieldRef;
 import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AbstractionWithPath;
@@ -210,40 +208,22 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 	 * @return true if a reverseFlow should be triggered or an inactive taint should be propagated (= resulting object is stored in heap = alias)
 	 */
 	public boolean triggerInaktiveTaintOrReverseFlow(Value val, Abstraction source){
-		if(val == null){
+		// If the left side has no base object, we do not look for aliases.
+		if (val == null)
 			return false;
-		}
-		
-		// Do not trigger a backwards analysis on an empty access path
-		// (method called inside a secret-depending conditional)
-		if (source.getAccessPath().getPlainValue() == null && source.getAccessPath().getFirstField() == null)
+				
+		// Do not start a backwards analysis on immutable types
+		if (val instanceof PrimType)
 			return false;
-		
-		//no string
-		if(!(val instanceof InstanceFieldRef) && !(val instanceof ArrayRef) 
-				&& val.getType() instanceof RefType && ((RefType)val.getType()).getClassName().equals("java.lang.String")){
-			return false;
-		}
-		if(val instanceof InstanceFieldRef && ((InstanceFieldRef)val).getBase().getType() instanceof RefType &&
-				 ((RefType)((InstanceFieldRef)val).getBase().getType()).getClassName().equals("java.lang.String")){
-			return false;
-		}
-		if(val.getType() instanceof PrimType){
-			return false;
-		}
-		if(val instanceof Constant)
+		if (val instanceof Constant)
 			return false;
 		
-		return (val instanceof FieldRef || val instanceof ArrayRef);
-		
-		/*
-		 if(DataTypeHandler.isFieldRefOrArrayRef(val) ||
-				source.getAccessPath().isInstanceFieldRef() ||
-				source.getAccessPath().isStaticFieldRef()){
+		if (DataTypeHandler.isFieldRefOrArrayRef(val)
+				|| source.getAccessPath().isInstanceFieldRef()
+				|| source.getAccessPath().isStaticFieldRef()){
 			return true;
 		}
 		return false;
-		*/
 	}
 	
 	@Override

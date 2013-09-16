@@ -131,6 +131,23 @@ public class ImplicitFlowTestCode {
 		runSimpleRecursion(secret);
 	}
 	
+	private void recurseIndirect(int i) {
+		if (i > 0)
+			recurseIndirect2(i--);
+		else
+			doPublish();
+	}
+
+	private void recurseIndirect2(int i) {
+		recurseIndirect(i);
+	}
+	
+	public void recursionTest3() {
+		int secret = TelephonyManager.getIMEI();
+		if (secret == 42)
+			recurseIndirect(42);
+	}
+
 	public void exceptionTest() {
 		String tainted = TelephonyManager.getDeviceId();
 		try {
@@ -177,10 +194,16 @@ public class ImplicitFlowTestCode {
 		cm.publish(val);
 	}
 	
-	private static int staticVal = 0;
+	private static int staticVal = 0;	
+	
+	private void bar() {
+		String x = "Hello World";
+		System.out.println(x);
+	}
 	
 	private void staticFieldAccess() {
 		staticVal = 42;
+		bar();
 	}
 
 	public void staticFieldTest() {
@@ -189,6 +212,44 @@ public class ImplicitFlowTestCode {
 			staticFieldAccess();
 		ConnectionManager cm = new ConnectionManager();
 		cm.publish(staticVal);
+	}
+	
+	private static void staticDoPublish() {
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(staticVal);
+	}
+
+	private static void conditionalStaticFieldAccess(int i) {
+		if (i == 42)
+			staticVal = 42;
+	}
+	
+	public void staticFieldTest2() {
+		int secret = TelephonyManager.getIMEI();
+		conditionalStaticFieldAccess(secret);
+		staticDoPublish();
+	}
+	
+	private static class StaticDataClass {
+		StaticDataClass2 data;
+	}
+	
+	private static StaticDataClass staticDataClass = new StaticDataClass();
+	
+	private static class StaticDataClass2 {
+		int data;
+	}
+	
+	private static void conditionalStaticClassAccess() {
+		ImplicitFlowTestCode.staticDataClass.data.data = 42;
+	}
+
+	public void staticFieldTest3() {
+		int secret = TelephonyManager.getIMEI();
+		if (secret == 42)
+			conditionalStaticClassAccess();
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(ImplicitFlowTestCode.staticDataClass.data.data);
 	}
 
 	public void integerClassTest() {
