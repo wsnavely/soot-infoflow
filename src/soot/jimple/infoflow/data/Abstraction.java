@@ -215,6 +215,8 @@ public class Abstraction implements Cloneable {
 		Abstraction abs = deriveNewAbstraction(AccessPath.getEmptyAccessPath());
 		if (abs.conditionalCallSite == null)
 			abs.conditionalCallSite = conditionalCallSite;
+		abs.activationUnit = null;
+		abs.activationUnitOnCurrentLevel = null;
 		return abs;
 	}
 	

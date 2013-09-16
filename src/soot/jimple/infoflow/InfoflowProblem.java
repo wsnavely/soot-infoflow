@@ -269,8 +269,8 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								// For static targets, disregard static initializers since
 								// they always get the same value on every first access to
 								// the class, so they are not really conditional
-								if (leftValue instanceof StaticFieldRef && interproceduralCFG().getMethodOf(src).getName().equals("<clinit>"))
-									return Collections.singleton(newSource);
+//								if (leftValue instanceof StaticFieldRef && interproceduralCFG().getMethodOf(src).getName().equals("<clinit>"))
+//									return Collections.singleton(newSource);
 								addLeftValue = true;
 							}
 							else {
@@ -525,6 +525,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							return Collections.emptySet();
 						}
 
+
 						// Check whether we must leave a conditional branch
 						if (source.isTopPostdominator(stmt))
 							source = source.dropTopPostdominator();
@@ -554,13 +555,13 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						if (!dest.isStatic() && ie instanceof InstanceInvokeExpr) {
 							InstanceInvokeExpr vie = (InstanceInvokeExpr) ie;
 							// this might be enough because every call must happen with a local variable which is tainted itself:
-							if (vie.getBase().equals(newSource.getAccessPath().getPlainValue())) {
-								Abstraction abs = newSource.deriveNewAbstraction(newSource.getAccessPath().copyWithNewValue
+							if (vie.getBase().equals(source.getAccessPath().getPlainValue())) {
+								Abstraction abs = source.deriveNewAbstraction(source.getAccessPath().copyWithNewValue
 										(dest.getActiveBody().getThisLocal()));
 								if (pathTracking == PathTrackingMethod.ForwardTracking)
 									((AbstractionWithPath) abs).addPathElement(stmt);
 								//add new callArgs:
-								assert abs != newSource; 		// our source abstraction must be immutable
+								assert abs != source; 		// our source abstraction must be immutable
 								abs.setAbstractionFromCallEdge(abs.clone());
 								res.add(abs);
 							}
@@ -571,13 +572,13 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							assert dest.getParameterCount() == callArgs.size();
 							// check if param is tainted:
 							for (int i = 0; i < callArgs.size(); i++) {
-								if (callArgs.get(i).equals(newSource.getAccessPath().getPlainLocal()) &&
-										(triggerInaktiveTaintOrReverseFlow(callArgs.get(i), newSource) || newSource.isAbstractionActive())) {
-									Abstraction abs = newSource.deriveNewAbstraction(newSource.getAccessPath().copyWithNewValue
+								if (callArgs.get(i).equals(source.getAccessPath().getPlainLocal()) &&
+										(triggerInaktiveTaintOrReverseFlow(callArgs.get(i), source) || source.isAbstractionActive())) {
+									Abstraction abs = source.deriveNewAbstraction(source.getAccessPath().copyWithNewValue
 											(paramLocals.get(i)), stmt);
 									if (pathTracking == PathTrackingMethod.ForwardTracking)
 										((AbstractionWithPath) abs).addPathElement(stmt);
-									assert abs != newSource;		// our source abstraction must be immutable
+									assert abs != source;		// our source abstraction must be immutable
 									abs.setAbstractionFromCallEdge(abs.clone());
 									res.add(abs);
 								}
@@ -585,11 +586,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						}
 
 						// staticfieldRefs must be analyzed even if they are not part of the params:
-						if (newSource.getAccessPath().isStaticFieldRef() && newSource.isAbstractionActive()) {
-							Abstraction abs;
-							abs = newSource.clone();
-							assert (abs.equals(newSource) && abs.hashCode() == newSource.hashCode());
-							assert abs != newSource;		// our source abstraction must be immutable
+						if (source.getAccessPath().isStaticFieldRef() && newSource.isAbstractionActive()) {
+							Abstraction abs = source.clone();
+							assert (abs.equals(source) && abs.hashCode() == source.hashCode());
+							assert abs != source;		// our source abstraction must be immutable
 							abs.setAbstractionFromCallEdge(abs.clone());
 							res.add(abs);
 						}
@@ -715,8 +715,6 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 						// easy: static
 						if (newSource.getAccessPath().isStaticFieldRef()) {
-							SootMethod sm = interproceduralCFG().getMethodOf(callSite);
-							
 							// Simply pass on the taint
 							res.add(newSource);
 							
