@@ -78,6 +78,7 @@ public class Infoflow implements IInfoflow {
 	private IInfoflowConfig sootConfig;
 	private boolean stopAfterFirstFlow = false;
 	private boolean inspectSinks = true;
+	private boolean enableImplicitFlows = false;
 
     private BiDirICFGFactory icfgFactory = new DefaultBiDiICFGFactory();
     private List<Transform> preProcessors = Collections.emptyList();
@@ -121,6 +122,11 @@ public class Infoflow implements IInfoflow {
 	@Override
 	public void setPathTracking(PathTrackingMethod method) {
 		this.pathTracking = method;
+	}
+
+	@Override
+	public void setEnableImplicitFlows(boolean enableImplicitFlows) {
+		this.enableImplicitFlows = enableImplicitFlows;
 	}
 	
 	public void setSootConfig(IInfoflowConfig config){
@@ -315,6 +321,7 @@ public class Infoflow implements IInfoflow {
 				forwardProblem.setTaintWrapper(taintWrapper);
 				forwardProblem.setPathTracking(pathTracking);
 				forwardProblem.setStopAfterFirstFlow(stopAfterFirstFlow);
+				forwardProblem.setEnableImplicitFlows(enableImplicitFlows);
 
 				// We have to look through the complete program to find sources
 				// which are then taken as seeds.
@@ -398,12 +405,11 @@ public class Infoflow implements IInfoflow {
 				BackwardsInfoflowProblem backProblem = new BackwardsInfoflowProblem();
 				InfoflowSolver backSolver = new InfoflowSolver(backProblem, debug, executor);
 				forwardProblem.setBackwardSolver(backSolver);
-				forwardProblem.setDebug(debug);
 				forwardProblem.setInspectSinks(inspectSinks);
 				
 				backProblem.setForwardSolver((InfoflowSolver) forwardSolver);
 				backProblem.setTaintWrapper(taintWrapper);
-				backProblem.setDebug(debug);
+				backProblem.setEnableImplicitFlows(enableImplicitFlows);
 
 				forwardSolver.solve();
 

@@ -272,5 +272,25 @@ public class ImplicitFlowTestCode {
 		//cm.publish(new String(secret2));
 		cm.publish(new String(secret));
 	}
+	
+	private void leavesByException() throws Exception {
+		throw new Exception("foobar");
+	}
+	
+	private void conditional() throws Exception {
+		int secret = TelephonyManager.getIMEI();
+		if (secret == 42)
+			leavesByException();
+	}
+	
+	public void conditionalExceptionTest() {
+		try {
+			conditional();
+		}
+		catch (Exception ex) {
+			ConnectionManager cm = new ConnectionManager();
+			cm.publish(ImplicitFlowTestCode.staticDataClass.data.data);
+		}
+	}
 
 }

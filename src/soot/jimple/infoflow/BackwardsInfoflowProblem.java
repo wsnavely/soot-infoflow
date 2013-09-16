@@ -33,6 +33,7 @@ import soot.jimple.DefinitionStmt;
 import soot.jimple.FieldRef;
 import soot.jimple.InstanceFieldRef;
 import soot.jimple.InstanceInvokeExpr;
+import soot.jimple.InvokeExpr;
 import soot.jimple.NewArrayExpr;
 import soot.jimple.NewExpr;
 import soot.jimple.ReturnStmt;
@@ -75,28 +76,53 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 				// We only need to consider assignments and identity statements
 				if (src instanceof DefinitionStmt) {
 					final DefinitionStmt defStmt = (DefinitionStmt) src;
-					final Value leftValue = BaseSelector.selectBase(defStmt.getLeftOp(), true);
 
 					return new FlowFunction<Abstraction>() {
 						
 						@Override
 						public Set<Abstraction> computeTargets(Abstraction source) {
-							Set<Abstraction> res = new HashSet<Abstraction>();
-	
+							Set<Abstraction> res = computeAliases(defStmt, source);
+							
+							// If the next statement assigns the base of the tainted value,
+							// we look ahead with the alias search. This fixes the problem
+							// that the first statement of a method never ends up in "src".
+							if (dest instanceof DefinitionStmt) {
+								DefinitionStmt defStmt = (DefinitionStmt) dest;
+								for (Abstraction newAbs : res)
+									if (baseMatches(defStmt.getLeftOp(), newAbs))
+										computeAliases(defStmt, newAbs);
+ 							}
+							
+							return res;
+						}
+
+						/**
+						 * Computes the aliases for the given statement
+						 * @param def The definition statement from which to extract
+						 * the alias information
+						 * @param source The source abstraction of the alias search
+						 * from before the current statement
+						 * @return The set of abstractions after the current statement
+						 */
+						private Set<Abstraction> computeAliases
+								(final DefinitionStmt defStmt, Abstraction source) {
+							final Set<Abstraction> res = new HashSet<Abstraction>();
+							final Value leftValue = BaseSelector.selectBase(defStmt.getLeftOp(), true);
+
 							// Check whether the left side of the assignment matches our
 							// current taint abstraction
 							final boolean leftSideMatches = baseMatches(leftValue, source);
 							if (!leftSideMatches)
 								res.add(source);
 							
-							if (src instanceof AssignStmt) {
+							if (defStmt instanceof AssignStmt) {
 								// A backward analysis looks for aliases of existing taints and thus
 								// cannot create new taints out of thin air
 								if (source.equals(zeroValue))
 									return Collections.emptySet();
 								
 								// Get the right side of the assignment
-								final AssignStmt assignStmt = (AssignStmt) src;
+								final AssignStmt assignStmt = (AssignStmt) defStmt;
 								final Value rightValue = BaseSelector.selectBase(assignStmt.getRightOp(), false);
 	
 								// Is the left side overwritten completely?
@@ -105,7 +131,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 									// all taint propagations must be below that point, so this is the
 									// right point to turn around.
 									if (triggerInaktiveTaintOrReverseFlow(leftValue, source))
-										for (Unit u : ((BackwardsInfoflowCFG) interproceduralCFG()).getPredsOf(src))
+										for (Unit u : interproceduralCFG().getPredsOf(defStmt))
 											fSolver.processEdge(new PathEdge<Unit, Abstraction>(source.getAbstractionFromCallEdge(), u, source));
 	
 									// Termination shortcut: If the right side is a value we do not track,
@@ -160,7 +186,8 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 								// the assignment.
 								if (!(rightValue instanceof NewExpr || rightValue instanceof NewArrayExpr
 										|| rightValue instanceof Constant
-										|| rightValue instanceof BinopExpr)) {
+										|| rightValue instanceof BinopExpr
+										|| rightValue instanceof InvokeExpr)) {
 									boolean addRightValue = false;
 									boolean cutFirstField = false;
 	
@@ -202,21 +229,13 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 								}
 							}
 							
-							// If the next statement assigns the base of the tainted value, we can
-							// already start the forward solver. This is especially important for
-							// cases in which the first statement of a method never ends up in "src".
-							if (dest instanceof DefinitionStmt) {
-								DefinitionStmt defStmt = (DefinitionStmt) dest;
-								for (Abstraction newAbs : res)
-									if (baseMatches(defStmt.getLeftOp(), newAbs))
-										if (triggerInaktiveTaintOrReverseFlow(newAbs.getAccessPath().getPlainValue(), newAbs))
-											for (Unit predUnit : interproceduralCFG().getPredsOf(dest))
-												fSolver.processEdge(new PathEdge<Unit, Abstraction>(source.getAbstractionFromCallEdge(), predUnit, newAbs));
-							}
+							// Trigger the forward solver with every newly-created alias
+							// on a static field. Since we don't have a fixed turn-around
+							// point for static fields, we turn around on every use.
 							for (Abstraction newAbs : res)
-								if (newAbs.getAccessPath().isStaticFieldRef())
-									for (Unit predUnit : interproceduralCFG().getPredsOf(dest))
-										fSolver.processEdge(new PathEdge<Unit, Abstraction>(source.getAbstractionFromCallEdge(), predUnit, newAbs));
+								if (newAbs.getAccessPath().isStaticFieldRef() && newAbs != source)
+									for (Unit u : interproceduralCFG().getPredsOf(defStmt))
+										fSolver.processEdge(new PathEdge<Unit, Abstraction>(newAbs.getAbstractionFromCallEdge(), u, newAbs));
 							
 							return res;
 						}

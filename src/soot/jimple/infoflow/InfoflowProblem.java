@@ -51,8 +51,8 @@ import soot.jimple.ThrowStmt;
 import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AbstractionWithPath;
 import soot.jimple.infoflow.data.AccessPath;
-import soot.jimple.infoflow.heros.InfoflowSolver;
 import soot.jimple.infoflow.heros.InfoflowCFG.UnitContainer;
+import soot.jimple.infoflow.heros.InfoflowSolver;
 import soot.jimple.infoflow.source.DefaultSourceSinkManager;
 import soot.jimple.infoflow.source.ISourceSinkManager;
 import soot.jimple.infoflow.util.BaseSelector;
@@ -64,7 +64,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 	private final ISourceSinkManager sourceSinkManager;
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
-
+    
 	/**
 	 * Computes the taints produced by a taint wrapper object
 	 * @param iStmt The call statement the taint wrapper shall check for well-
@@ -236,10 +236,6 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							boolean addLeftValue = false;
 							boolean cutFirstField = false;
 							Set<Abstraction> res = new HashSet<Abstraction>();
-							
-							SootMethod sm = interproceduralCFG().getMethodOf(src);
-							if (interproceduralCFG().getMethodOf(src).getName().contains("conditionalStaticClassAccess"))
-								System.out.println("x");
 							
 							// shortcuts:
 							// on NormalFlow taint cannot be created
@@ -446,8 +442,8 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					};
 				}
 				// IF statements can lead to implicit flows
-				else if (src instanceof IfStmt || src instanceof LookupSwitchStmt
-						|| src instanceof TableSwitchStmt) {
+				else if (enableImplicitFlows && (src instanceof IfStmt || src instanceof LookupSwitchStmt
+						|| src instanceof TableSwitchStmt)) {
 					final Value condition = src instanceof IfStmt ? ((IfStmt) src).getCondition()
 							: src instanceof LookupSwitchStmt ? ((LookupSwitchStmt) src).getKey()
 							: ((TableSwitchStmt) src).getKey();
@@ -589,7 +585,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						}
 
 						// staticfieldRefs must be analyzed even if they are not part of the params:
-						if (newSource.getAccessPath().isStaticFieldRef()) {
+						if (newSource.getAccessPath().isStaticFieldRef() && newSource.isAbstractionActive()) {
 							Abstraction abs;
 							abs = newSource.clone();
 							assert (abs.equals(newSource) && abs.hashCode() == newSource.hashCode());
@@ -806,6 +802,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				// special treatment for native methods:
 				if (call instanceof Stmt) {
 					final Stmt iStmt = (Stmt) call;
+					final InvokeExpr invExpr = iStmt.getInvokeExpr();
 					final List<Value> callArgs = iStmt.getInvokeExpr().getArgs();
 
 					return new FlowFunction<Abstraction>() {
@@ -868,18 +865,26 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								}
 							}
 
-							if (iStmt instanceof AssignStmt) {
-								final AssignStmt stmt = (AssignStmt) iStmt;
-								if (sourceSinkManager.isSource(stmt, interproceduralCFG())) {
-									logger.debug("Found source: " + stmt.getInvokeExpr().getMethod());
-									Abstraction abs; 
+							// Sources can either be assignments like x = getSecret() or
+							// instance method calls like constructor invocations
+							if (source == zeroValue && (iStmt instanceof AssignStmt || invExpr instanceof InstanceInvokeExpr)) {
+								if (sourceSinkManager.isSource(iStmt, interproceduralCFG())) {
+									final Value target;
+									if (iStmt instanceof AssignStmt)
+										target = ((AssignStmt) iStmt).getLeftOp();
+									else {
+										target = ((InstanceInvokeExpr) invExpr).getBase();
+									}
+									
+									final Abstraction abs;
 									if (pathTracking == PathTrackingMethod.ForwardTracking)
-										abs = new AbstractionWithPath(stmt.getLeftOp(),
-												stmt.getInvokeExpr(),
-												stmt, false, true, iStmt).addPathElement(call);
+										abs = new AbstractionWithPath(target,
+												iStmt.getInvokeExpr(),
+												iStmt, false, true, iStmt).addPathElement(call);
 									else
-										abs = new Abstraction(stmt.getLeftOp(),
-												stmt.getInvokeExpr(), stmt, false, true, iStmt);
+										abs = new Abstraction(target,
+												iStmt.getInvokeExpr(), iStmt, false, true, iStmt);
+									
 									abs.setZeroAbstraction(source.getZeroAbstraction());
 									res.add(abs);
 									res.remove(zeroValue);

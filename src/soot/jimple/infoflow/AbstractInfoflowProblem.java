@@ -33,6 +33,7 @@ import soot.jimple.infoflow.taintWrappers.ITaintPropagationWrapper;
 import soot.jimple.infoflow.util.DataTypeHandler;
 import soot.jimple.internal.JimpleLocal;
 import soot.jimple.toolkits.ide.DefaultJimpleIFDSTabulationProblem;
+
 /**
  * abstract super class which 
  * 	- concentrates functionality used by InfoflowProblem and BackwardsInfoflowProblem
@@ -43,7 +44,7 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 
 	/**
 	 * Supported methods for tracking data flow paths through applications
-	 * @author sarzt
+	 * @author Steven Arzt
 	 *
 	 */
 	public enum PathTrackingMethod {
@@ -60,16 +61,14 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 		 */
 		ForwardTracking
 	}
-
-	
 	
 	protected final Map<Unit, Set<Abstraction>> initialSeeds = new HashMap<Unit, Set<Abstraction>>();
 	protected final InfoflowResults results;
 	protected ITaintPropagationWrapper taintWrapper;
 	protected PathTrackingMethod pathTracking = PathTrackingMethod.NoTracking;
 	protected NativeCallHandler ncHandler = new DefaultNativeCallHandler();
-	protected boolean debug = false;
 	protected boolean inspectSinks = true;
+	protected boolean enableImplicitFlows = false;
 
 	Abstraction zeroValue = null;
 	
@@ -91,11 +90,7 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 	public void setTaintWrapper(ITaintPropagationWrapper wrapper){
 		taintWrapper = wrapper;
 	}
-	
-	public void setDebug(boolean debug){
-		this.debug = debug;
-	}
-	
+		
 	/**
 	 * Sets whether the information flow analysis shall stop after the first
 	 * flow has been found
@@ -106,7 +101,6 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 		this.stopAfterFirstFlow = stopAfterFirstFlow;
 	}
 	
-	
 	/**
 	 * Sets whether and how the paths between the sources and sinks shall be
 	 * tracked
@@ -116,6 +110,15 @@ public abstract class AbstractInfoflowProblem extends DefaultJimpleIFDSTabulatio
 	public void setPathTracking(PathTrackingMethod method) {
 		this.pathTracking = method;
 		this.ncHandler.setPathTracking(method);
+	}
+	
+	/**
+	 * Sets whether the solver shall consider implicit flows.
+	 * @param enableImplicitFlows True if implicit flows shall be considered,
+	 * otherwise false.
+	 */
+	public void setEnableImplicitFlows(boolean enableImplicitFlows) {
+		this.enableImplicitFlows = enableImplicitFlows;
 	}
 	
 

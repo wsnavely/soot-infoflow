@@ -47,8 +47,14 @@ public interface IInfoflow {
 	 */
 	public void setStopAfterFirstFlow(boolean stopAfterFirstFlow);
 
+	/**
+	 * Sets whether the solver shall consider implicit flows.
+	 * @param enableImplicitFlows True if implicit flows shall be considered,
+	 * otherwise false.
+	 */
+	public void setEnableImplicitFlows(boolean enableImplicitFlows);
 
-    /**
+	/**
      * Sets the interprocedural CFG to be used by the InfoFlowProblem
      * @param factory the interprocedural control flow factory
      */
