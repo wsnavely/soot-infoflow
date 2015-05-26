@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import soot.Hierarchy;
 import soot.MethodOrMethodContext;
 import soot.PackManager;
 import soot.PatchingChain;
@@ -35,6 +36,7 @@ import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.Stmt;
+import soot.jimple.StringConstant;
 import soot.jimple.infoflow.aliasing.FlowSensitiveAliasStrategy;
 import soot.jimple.infoflow.aliasing.IAliasingStrategy;
 import soot.jimple.infoflow.aliasing.PtsBasedAliasStrategy;
@@ -62,9 +64,11 @@ import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.infoflow.solver.cfg.InfoflowCFG;
 import soot.jimple.infoflow.solver.fastSolver.InfoflowSolver;
 import soot.jimple.infoflow.source.ISourceSinkManager;
+import soot.jimple.infoflow.util.IntentTag;
 import soot.jimple.infoflow.util.InterproceduralConstantValuePropagator;
 import soot.jimple.infoflow.util.SootMethodRepresentationParser;
 import soot.jimple.infoflow.util.SystemClassHandler;
+import soot.jimple.internal.AbstractInvokeExpr;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.jimple.toolkits.scalar.ConditionalBranchFolder;
 import soot.jimple.toolkits.scalar.ConstantPropagatorAndFolder;
@@ -784,16 +788,37 @@ public class Infoflow extends AbstractInfoflow {
 			// have no sink in the program, we don't need to perform any
 			// analysis
 			PatchingChain<Unit> units = m.getActiveBody().getUnits();
+			Stmt old_s = null; 
+			
 			for (Unit u : units) {
 				Stmt s = (Stmt) u;
 				if (sourcesSinks.getSourceInfo(s, iCfg) != null) {
-					forwardProblem.addInitialSeeds(u, Collections.singleton(forwardProblem.zeroValue()));
+					forwardProblem.addInitialSeeds(u,
+							Collections.singleton(forwardProblem.zeroValue()));
 					logger.debug("Source found: {}", u);
 				}
+				
 				if (sourcesSinks.isSink(s, iCfg, null)) {
-		            logger.debug("Sink found: {}", u);
+					logger.debug("Sink found: {}", u);
 					sinkCount++;
+					if (isIntentSink(s)) {
+						String emph = "\u001B[31m";
+						String ansi_reset = "\u001B[0m";
+						logger.info(emph + "INTENT SINK: " + ansi_reset
+								+ s.toString());
+						logger.info(emph + "PREV: " + ansi_reset
+								+ old_s.toString());
+						String intentID = extractIntentID(old_s);
+						logger.info(emph + "IntentID: " + ansi_reset + intentID);
+						s.addTag(new IntentTag("IntentID", intentID));
+						logger.info(emph
+								+ "IntentID: "
+								+ ansi_reset
+								+ ((IntentTag) s.getTag("IntentID"))
+										.getIntentID());
+					}
 				}
+				old_s = s;	
 			}
 			
 		}
@@ -953,5 +978,54 @@ public class Infoflow extends AbstractInfoflow {
 	public void setPathBuilderFactory(IPathBuilderFactory factory) {
 		this.pathBuilderFactory = factory;
 	}
+	
+ 	// BEGIN DIDFAIL ADDITIONS
+	 
+ 	public static boolean isIntentSink(Stmt stmt) {
+ 		if (!stmt.containsInvokeExpr()) {
+ 			return false;
+ 		}	
+ 		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
+ 		SootMethod meth = ie.getMethod();
+ 		SootClass android_content_Context = Scene.v().getSootClass("android.content.Context");
+ 		// FIXME: Check the method name better!
+ 		if (meth.toString().indexOf("startActivity") == -1) {
+ 			return false;
+ 		}
+ 		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()));
+ 	}
+ 	
+ 	public static boolean isIntentResultSink(Stmt stmt) {
+ 		if (!stmt.containsInvokeExpr()) {
+ 			return false;
+ 		}	
+ 		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
+ 		SootMethod meth = ie.getMethod();
+ 		SootClass android_content_Context = Scene.v().getSootClass("android.app.Activity");
+ 		if (meth.toString().indexOf("setResult") == -1) {
+ 			return false;
+ 		}
+ 		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()));
+ 	}
+ 	
+ 	public static String extractIntentID(Stmt prevStmt) {
+ 		try {
+ 			if (!prevStmt.containsInvokeExpr()) {
+ 				return "";
+ 			}
+ 			AbstractInvokeExpr ie = (AbstractInvokeExpr) prevStmt.getInvokeExpr();
+ 			String sig = ie.getMethod().getSignature();
+ 			if (!sig.equals("<android.content.Intent: android.content.Intent putExtra(java.lang.String,java.lang.String)>")) {
+ 				return "";
+ 			}
+ 			StringConstant ret = (StringConstant) ie.getArg(0);
+ 			return ret.value;
+ 		} catch (Exception e) {
+ 			return "";
+ 		}
+ 	}
+ 	
+ 	// END DIDFAIL ADDITION
+	
 	
 }

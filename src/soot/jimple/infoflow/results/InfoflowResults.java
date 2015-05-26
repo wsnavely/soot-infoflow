@@ -40,7 +40,6 @@ public class InfoflowResults {
 			new MyConcurrentHashMap<ResultSinkInfo, Set<ResultSourceInfo>>();
 	
 	public InfoflowResults() {
-		
 	}
 	
 	/**
