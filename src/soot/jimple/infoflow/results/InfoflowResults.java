@@ -13,19 +13,20 @@ package soot.jimple.infoflow.results;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import heros.solver.Pair;
 import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
-import soot.jimple.infoflow.collect.ConcurrentHashSet;
-import soot.jimple.infoflow.collect.MyConcurrentHashMap;
+import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AccessPath;
+import soot.util.ConcurrentHashMultiMap;
+import soot.util.MultiMap;
 
 /**
  * Class for collecting information flow results
@@ -33,11 +34,11 @@ import soot.jimple.infoflow.data.AccessPath;
  * @author Steven Arzt
  */
 public class InfoflowResults {
-
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+	
+	private final Logger logger = LoggerFactory.getLogger(getClass());
 		
-	private final MyConcurrentHashMap<ResultSinkInfo, Set<ResultSourceInfo>> results =
-			new MyConcurrentHashMap<ResultSinkInfo, Set<ResultSourceInfo>>();
+	private final MultiMap<ResultSinkInfo, ResultSourceInfo> results =
+			new ConcurrentHashMultiMap<ResultSinkInfo, ResultSourceInfo>();
 	
 	public InfoflowResults() {
 	}
@@ -59,8 +60,8 @@ public class InfoflowResults {
 	public int numConnections() {
 		int num = 0;
 		if (this.results != null)
-			for (Entry<ResultSinkInfo, Set<ResultSourceInfo>> entry : this.results.entrySet())
-				num += entry.getValue().size();
+			for (ResultSinkInfo sink : this.results.keySet())
+				num += this.results.get(sink).size();
 		return num;
 	}
 	
@@ -103,28 +104,68 @@ public class InfoflowResults {
 		this.addResult(new ResultSinkInfo(sink, sinkStmt), new ResultSourceInfo(source, sourceStmt));
 	}
 	
-	public void addResult(AccessPath sink, Stmt sinkStmt,
+	public Pair<ResultSourceInfo, ResultSinkInfo> addResult(AccessPath sink, Stmt sinkStmt,
 			AccessPath source, Stmt sourceStmt,
 			Object userData,
-			List<Stmt> propagationPath) {
-		this.addResult(new ResultSinkInfo(sink, sinkStmt),
-				new ResultSourceInfo(source, sourceStmt, userData, propagationPath));
+			List<Abstraction> propagationPath) {
+		// Get the statements and the access paths from the abstractions
+		List<Stmt> stmtPath = null;
+		List<AccessPath> apPath = null;
+		if (propagationPath != null) {
+			stmtPath = new ArrayList<Stmt>(propagationPath.size());
+			apPath = new ArrayList<AccessPath>(propagationPath.size());
+			for (Abstraction pathAbs : propagationPath) {
+				if (pathAbs.getCurrentStmt() != null) {
+					stmtPath.add(pathAbs.getCurrentStmt());
+					apPath.add(pathAbs.getAccessPath());
+				}
+			}
+		}
+		
+		// Add the result
+		return addResult(sink, sinkStmt, source, sourceStmt, userData, stmtPath, apPath);
 	}
 	
-	public void addResult(ResultSinkInfo sink, ResultSourceInfo source) {
-		assert sink != null;
-		assert source != null;
+	public Pair<ResultSourceInfo, ResultSinkInfo> addResult(AccessPath sink, Stmt sinkStmt,
+			AccessPath source, Stmt sourceStmt,
+			Object userData,
+			List<Stmt> propagationPath,
+			List<AccessPath> propagationAccessPath) {
+		ResultSourceInfo sourceObj = new ResultSourceInfo(source, sourceStmt, userData, propagationPath,
+				propagationAccessPath);
+		ResultSinkInfo sinkObj = new ResultSinkInfo(sink, sinkStmt);
 		
-		Set<ResultSourceInfo> sourceInfo = this.results.putIfAbsentElseGet
-				(sink, new ConcurrentHashSet<ResultSourceInfo>());
-		sourceInfo.add(source);
+		this.addResult(sinkObj, sourceObj);
+		return new Pair<>(sourceObj, sinkObj);
+	}
+	
+	/**
+	 * Adds the given result to this data structure
+	 * @param sink The sink at which the taint arrived
+	 * @param source The source from which the taint originated
+	 */
+	public void addResult(ResultSinkInfo sink, ResultSourceInfo source) {
+		this.results.put(sink, source);
+	}
+	
+	/**
+	 * Adds all results from the given data structure to this one
+	 * @param results The data structure from which to copy the results
+	 */
+	public void addAll(InfoflowResults results) {
+		if (results == null || results.isEmpty())
+			return;
+		
+		for (ResultSinkInfo sink : results.getResults().keySet())
+			for (ResultSourceInfo source : results.getResults().get(sink))
+				addResult(sink, source);
 	}
 
 	/**
 	 * Gets all results in this object as a hash map.
 	 * @return All results in this object as a hash map.
 	 */
-	public Map<ResultSinkInfo, Set<ResultSourceInfo>> getResults() {
+	public MultiMap<ResultSinkInfo, ResultSourceInfo> getResults() {
 		return this.results;
 	}
 	
@@ -218,8 +259,8 @@ public class InfoflowResults {
 			logger.info("Found a flow to sink {}, from the following sources:", sink);
 			for (ResultSourceInfo source : this.results.get(sink)) {
 				logger.info("\t- {}", source.getSource());
-				if (source.getPath() != null && !source.getPath().isEmpty())
-					logger.info("\t\ton Path {}", source.getPath());
+				if (source.getPath() != null)
+					logger.info("\t\ton Path {}", Arrays.toString(source.getPath()));
 			}
 		}
 	}
@@ -234,8 +275,8 @@ public class InfoflowResults {
 			wr.write("Found a flow to sink " + sink + ", from the following sources:\n");
 			for (ResultSourceInfo source : this.results.get(sink)) {
 				wr.write("\t- " + source.getSource() + "\n");
-				if (source.getPath() != null && !source.getPath().isEmpty())
-					wr.write("\t\ton Path " + source.getPath() + "\n");
+				if (source.getPath() != null)
+					wr.write("\t\ton Path " + Arrays.toString(source.getPath()) + "\n");
 			}
 		}
 	}
@@ -263,5 +304,30 @@ public class InfoflowResults {
 			}
 		return sb.toString();
 	}
-
+	
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((results == null) ? 0 : results.hashCode());
+		return result;
+	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		InfoflowResults other = (InfoflowResults) obj;
+		if (results == null) {
+			if (other.results != null)
+				return false;
+		} else if (!results.equals(other.results))
+			return false;
+		return true;
+	}
+	
 }

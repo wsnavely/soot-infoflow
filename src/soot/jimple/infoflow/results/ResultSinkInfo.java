@@ -1,13 +1,15 @@
 package soot.jimple.infoflow.results;
 
 import soot.jimple.Stmt;
-import soot.jimple.infoflow.Infoflow;
+import soot.jimple.infoflow.InfoflowConfiguration;
 import soot.jimple.infoflow.data.AccessPath;
 import soot.tagkit.LineNumberTag;
 
 /**
- * Class for modeling information flowing into a specific source
+ * Class for modeling information flowing into a specific sink
+ * 
  * @author Steven Arzt
+ * 
  */
 public class ResultSinkInfo {
 	private final AccessPath accessPath;
@@ -41,7 +43,7 @@ public class ResultSinkInfo {
 
 	@Override
 	public int hashCode() {
-		return (Infoflow.getOneResultPerAccessPath() ? 31 * this.accessPath.hashCode() : 0)
+		return (InfoflowConfiguration.getOneResultPerAccessPath() ? 31 * this.accessPath.hashCode() : 0)
 				+ 7 * (this.sink == null ? 0 : this.sink.hashCode());
 	}
 	
@@ -60,7 +62,7 @@ public class ResultSinkInfo {
 		else if (!this.sink.equals(si.sink))
 			return false;
 		
-		return !Infoflow.getOneResultPerAccessPath()
+		return !InfoflowConfiguration.getOneResultPerAccessPath()
 				|| this.accessPath.equals(si.accessPath);
 	}
 }

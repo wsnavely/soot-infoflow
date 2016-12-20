@@ -11,28 +11,26 @@
 package soot.jimple.infoflow.data;
 
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Set;
 
-import soot.ArrayType;
 import soot.Local;
-import soot.RefType;
 import soot.SootField;
 import soot.Type;
 import soot.Value;
 import soot.jimple.ArrayRef;
-import soot.jimple.FieldRef;
 import soot.jimple.InstanceFieldRef;
 import soot.jimple.StaticFieldRef;
-import soot.jimple.infoflow.Infoflow;
-import soot.jimple.infoflow.collect.ConcurrentHashSet;
-import soot.jimple.infoflow.collect.MyConcurrentHashMap;
 
 /**
  * This class represents the taint, containing a base value and a list of fields
  * (length is bounded by Infoflow.ACCESSPATHLENGTH)
  */
 public class AccessPath implements Cloneable {
+	
+	public enum ArrayTaintType {
+		Contents,
+		Length,
+		ContentsAndLength
+	}
 	
 	// ATTENTION: This class *must* be immutable!
 	/*
@@ -49,76 +47,12 @@ public class AccessPath implements Cloneable {
 	
 	private final boolean taintSubFields;
 	private final boolean cutOffApproximation;
+	private final ArrayTaintType arrayTaintType;
+
+	private final boolean canHaveImmutableAliases;
 	
 	private int hashCode = 0;
 	
-	/**
-	 * Specialized pair class for field bases
-	 * 
-	 * @author Steven Arzt
-	 *
-	 */
-	public static class BasePair {
-		
-		private final SootField[] fields;
-		private final Type[] types;
-		private int hashCode = 0;
-		
-		public BasePair(SootField[] fields, Type[] types) {
-			this.fields = fields;
-			this.types = types;
-			
-			// Check whether this base makes sense
-			if (fields == null || fields.length == 0)
-				throw new RuntimeException("A base must contain at least one field");
-		}
-		
-		public SootField[] getFields() {
-			return this.fields;
-		}
-		
-		public Type[] getTypes()  {
-			return this.types;
-		}
-		
-		@Override
-		public int hashCode() {
-			if (hashCode == 0) {			
-				final int prime = 31;
-				int result = 1;
-				result = prime * result + Arrays.hashCode(fields);
-				result = prime * result + Arrays.hashCode(types);
-				hashCode = result;
-			}
-			return hashCode;
-		}
-		
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj)
-				return true;
-			if (obj == null)
-				return false;
-			if (getClass() != obj.getClass())
-				return false;
-			BasePair other = (BasePair) obj;
-			if (!Arrays.equals(fields, other.fields))
-				return false;
-			if (!Arrays.equals(types, other.types))
-				return false;
-			return true;
-		}
-		
-		@Override
-		public String toString() {
-			return Arrays.toString(fields);
-		}
-		
-	}
-	
-	private static MyConcurrentHashMap<Type, Set<BasePair>> baseRegister
-			= new MyConcurrentHashMap<Type, Set<BasePair>>();
-
 	/**
 	 * The empty access path denotes a code region depending on a tainted
 	 * conditional. If a function is called inside the region, there is no
@@ -134,234 +68,25 @@ public class AccessPath implements Cloneable {
 		this.fieldTypes = null;
 		this.taintSubFields = true;
 		this.cutOffApproximation = false;
+		this.arrayTaintType = ArrayTaintType.ContentsAndLength;
+		this.canHaveImmutableAliases = false;
 	}
-	
-	public AccessPath(Value val, boolean taintSubFields){
-		this(val, (SootField[]) null, null, (Type[]) null, taintSubFields);
-	}
-	
-	public AccessPath(Value val, SootField[] appendingFields, boolean taintSubFields){
-		this(val, appendingFields, null, (Type[]) null, taintSubFields);
-	}
-	
-	public AccessPath(Value val, SootField[] appendingFields, Type valType,
-			Type[] appendingFieldTypes, boolean taintSubFields) {
-		this(val, appendingFields, valType, appendingFieldTypes, taintSubFields, false, true);
-	}
-	
-	public AccessPath(Value val, SootField[] appendingFields, Type valType,
+
+	AccessPath(Local val, SootField[] appendingFields, Type valType,
 			Type[] appendingFieldTypes, boolean taintSubFields,
-			boolean cutFirstField, boolean reduceBases){
-		// Make sure that the base object is valid
-		assert (val == null && appendingFields != null && appendingFields.length > 0)
-		 	|| canContainValue(val);
-		
-		// Initialize the field type information if necessary
-		if (appendingFields != null && appendingFieldTypes == null) {
-			appendingFieldTypes = new Type[appendingFields.length];
-			for (int i = 0; i < appendingFields.length; i++)
-				appendingFieldTypes[i] = appendingFields[i].getType();
-		}
-		
-		SootField[] fields;
-		Type[] fieldTypes;
-		
-		// Get the base object, field and type
-		if(val instanceof FieldRef) {
-			FieldRef ref = (FieldRef) val;
-
-			// Set the base value and type if we have one
-			if (val instanceof InstanceFieldRef) {
-				InstanceFieldRef iref = (InstanceFieldRef) val;
-				this.value = (Local) iref.getBase();
-				this.baseType = value.getType();
-			}
-			else {
-				this.value = null;
-				this.baseType = null;
-			}
-			
-			// Handle the fields
-			fields = new SootField[(appendingFields == null ? 0 : appendingFields.length) + 1];
-			fields[0] = ref.getField();
-			if (appendingFields != null)
-				System.arraycopy(appendingFields, 0, fields, 1, appendingFields.length);
-			
-			fieldTypes = new Type[(appendingFieldTypes == null ? 0 : appendingFieldTypes.length) + 1];
-			fieldTypes[0] = valType != null ? valType : fields[0].getType();
-			if (appendingFieldTypes != null)
-				System.arraycopy(appendingFieldTypes, 0, fieldTypes, 1, appendingFieldTypes.length);
-		}
-		else if (val instanceof ArrayRef) {
-			ArrayRef ref = (ArrayRef) val;
-			this.value = (Local) ref.getBase();
-			this.baseType = valType == null ? value.getType() : valType;
-			
-			fields = appendingFields;
-			fieldTypes = appendingFieldTypes;
-		}
-		else {
-			this.value = (Local) val;
-			this.baseType = valType == null ? (this.value == null ? null : value.getType()) : valType;
-			
-			fields = appendingFields;
-			fieldTypes = appendingFieldTypes;
-		}
-		
-		// If we don't want to track fields at all, we can cut the field
-		// processing short
-		if (Infoflow.getAccessPathLength() == 0) {
-			fields = null;
-			fieldTypes = null;
-		}
-		
-		// Cut the first field if requested
-		if (cutFirstField && fields != null && fields.length > 0) {
-			SootField[] newFields = new SootField[fields.length - 1];
-			Type[] newTypes = new Type[newFields.length];
-			System.arraycopy(fields, 1, newFields, 0, newFields.length);
-			System.arraycopy(fieldTypes, 1, newTypes, 0, newTypes.length);
-			fields = newFields.length > 0 ? newFields : null;
-			fieldTypes = newTypes.length > 0 ? newTypes : null;
-		}
-		
-		// Make sure that only heap objects may have fields
-		assert this.value == null
-				|| this.value.getType() instanceof RefType 
-				|| this.value.getType() instanceof ArrayType
-				|| fields == null || fields.length == 0;
-		
-		// Check for recursive data structures. If a last field maps back to something we
-		// already know, we build a repeatable component from it
-		boolean recursiveCutOff = false;
-		if (Infoflow.getUseRecursiveAccessPaths() && reduceBases && fields != null) {
-			// f0...fi references an object of type T
-			// look for an extension f0...fi...fj that also references an object
-			// of type T
-			int ei = val instanceof StaticFieldRef ? 1 : 0;
-			while (ei < fields.length) {
-				final Type eiType = ei == 0 ? this.baseType : fieldTypes[ei - 1];
-				int ej = ei;
-				while (ej < fields.length) {
-					if (fieldTypes[ej] == eiType) {
-						// The types match, f0...fi...fj maps back to an object of the
-						// same type as f0...fi. We must thus convert the access path
-						// to f0...fi-1[...fj]fj+1
-						SootField[] newFields = new SootField[fields.length - (ej - ei) - 1];
-						Type[] newTypes = new Type[newFields.length];
-						
-						System.arraycopy(fields, 0, newFields, 0, ei);
-						System.arraycopy(fieldTypes, 0, newTypes, 0, ei);
-						
-						if (fields.length > ej) {
-							System.arraycopy(fields, ej + 1, newFields, ei, fields.length - ej - 1);
-							System.arraycopy(fieldTypes, ej + 1, newTypes, ei, fieldTypes.length - ej - 1);
-						}
-						
-						// Register the base
-						SootField[] base = new SootField[ej - ei + 1];
-						Type[] baseTypes = new Type[ej - ei + 1];
-						System.arraycopy(fields, ei, base, 0, base.length);
-						System.arraycopy(fieldTypes, ei, baseTypes, 0, base.length);
-						registerBase(eiType, base, baseTypes);
-						
-						fields = newFields;
-						fieldTypes = newTypes;
-						recursiveCutOff = true;
-					}
-					else
-						ej++;
-				}
-				ei++;
-			}
-		}
-		
-		// Cut the fields at the maximum access path length. If this happens,
-		// we must always add a star
-		if (fields != null) {
-			int fieldNum = Math.min(Infoflow.getAccessPathLength(), fields.length);
-			if (fields.length > fieldNum) {
-				this.taintSubFields = true;
-				this.cutOffApproximation = true;
-			}
-			else {
-				this.taintSubFields = taintSubFields;
-				this.cutOffApproximation = false || recursiveCutOff;
-			}
-			
-			if (fieldNum == 0) {
-				this.fields = null;
-				this.fieldTypes = null;
-			}
-			else {
-				this.fields = new SootField[fieldNum];
-				this.fieldTypes = new Type[fieldNum];
-				System.arraycopy(fields, 0, this.fields, 0, fieldNum);
-				System.arraycopy(fieldTypes, 0, this.fieldTypes, 0, fieldNum);
-			}
-		}
-		else {
-			this.taintSubFields = taintSubFields;
-			this.cutOffApproximation = false;
-			this.fields = null;
-			this.fieldTypes = null;
-		}
-		
-		// Type checks
-		assert this.value == null || !(!(this.baseType instanceof ArrayType)
-				&& !(this.baseType instanceof RefType && ((RefType) this.baseType).getSootClass().getName().equals("java.lang.Object")) 
-				&& !(this.baseType instanceof RefType && ((RefType) this.baseType).getSootClass().getName().equals("java.io.Serializable")) 
-				&& !(this.baseType instanceof RefType && ((RefType) this.baseType).getSootClass().getName().equals("java.lang.Cloneable")) 
-				&& this.value.getType() instanceof ArrayType);
-		assert this.value == null || !(this.baseType instanceof ArrayType
-				&& !(this.value.getType() instanceof ArrayType)
-				&& !(this.value.getType() instanceof RefType && ((RefType) this.value.getType()).getSootClass().getName().equals("java.lang.Object"))
-				&& !(this.value.getType() instanceof RefType && ((RefType) this.value.getType()).getSootClass().getName().equals("java.io.Serializable"))
-				&& !(this.value.getType() instanceof RefType && ((RefType) this.value.getType()).getSootClass().getName().equals("java.lang.Cloneable")))
-					: "Type mismatch. Type was " + this.baseType + ", value was: " + (this.value == null ? null : this.value.getType());
-		assert !isEmpty() || this.baseType == null;
+			boolean isCutOffApproximation,
+			ArrayTaintType arrayTaintType,
+			boolean canHaveImmutableAliases) {
+		this.value = val;
+		this.fields = appendingFields;
+		this.baseType = valType;
+		this.fieldTypes = appendingFieldTypes;
+		this.taintSubFields = taintSubFields;
+		this.cutOffApproximation = isCutOffApproximation;
+		this.arrayTaintType = arrayTaintType;
+		this.canHaveImmutableAliases = canHaveImmutableAliases;
 	}
 	
-	public AccessPath(SootField staticfield, boolean taintSubFields){
-		this(null, new SootField[] { staticfield }, null, new Type[] { staticfield.getType() }, taintSubFields);
-	}
-
-	public AccessPath(Value base, SootField field, boolean taintSubFields){
-		this(base, field == null ? null : new SootField[] { field }, null,
-				field == null ? null : new Type[] { field.getType() }, taintSubFields);
-		assert base instanceof Local;
-	}
-	
-	private static void registerBase(Type eiType, SootField[] base,
-			Type[] baseTypes) {
-		// Check whether we can further normalize the base
-		assert base.length == baseTypes.length;
-		for (int i = 0; i < base.length; i++)
-			if (baseTypes[i] == eiType) {
-				SootField[] newBase = new SootField[i + 1];
-				Type[] newTypes = new Type[i + 1];
-				
-				System.arraycopy(base, 0, newBase, 0, i + 1);
-				System.arraycopy(baseTypes, 0, newTypes, 0, i + 1);
-				
-				base = newBase;
-				baseTypes = newTypes;
-				break;
-			}
-		
-		Set<BasePair> bases = baseRegister.putIfAbsentElseGet
-				(eiType, new ConcurrentHashSet<BasePair>());
-		bases.add(new BasePair(base, baseTypes));
-	}
-	
-	public static void clearBaseRegister() {
-		baseRegister.clear();
-	}
-	
-	public static Collection<BasePair> getBaseForType(Type tp) {
-		return baseRegister.get(tp);
-	}
-
 	/**
 	 * Checks whether the given value can be the base value value of an access
 	 * path
@@ -370,6 +95,9 @@ public class AccessPath implements Cloneable {
 	 * path
 	 */
 	public static boolean canContainValue(Value val) {
+		if (val == null)
+			return false;
+		
 		return val instanceof Local
 				|| val instanceof InstanceFieldRef
 				|| val instanceof StaticFieldRef
@@ -397,7 +125,14 @@ public class AccessPath implements Cloneable {
 			return null;
 		return fields[0];
 	}
-
+	
+	/**
+	 * Checks whether the first field of this access path matches the given
+	 * field
+	 * @param field The field to check against
+	 * @return True if this access path has a non-empty field list and the first
+	 * field matches the given one, otherwise false
+	 */
 	public boolean firstFieldMatches(SootField field) {
 		if (fields == null || fields.length == 0)
 			return false;
@@ -436,6 +171,7 @@ public class AccessPath implements Cloneable {
 		result = prime * result + ((value == null) ? 0 : value.hashCode());
 		result = prime * result + ((baseType == null) ? 0 : baseType.hashCode());
 		result = prime * result + (this.taintSubFields ? 1 : 0);
+		result = prime * result + this.arrayTaintType.hashCode();
 		this.hashCode = result;
 		
 		return this.hashCode;
@@ -455,18 +191,23 @@ public class AccessPath implements Cloneable {
 				return false;
 		} else if (!value.equals(other.value))
 			return false;
+		if (!Arrays.equals(fields, other.fields))
+			return false;
+		if (!Arrays.equals(fieldTypes, other.fieldTypes))
+			return false;
+		
+		if (this.taintSubFields != other.taintSubFields)
+			return false;		
 		if (baseType == null) {
 			if (other.baseType != null)
 				return false;
 		} else if (!baseType.equals(other.baseType))
 			return false;
 		
-		if (this.taintSubFields != other.taintSubFields)
+		if (this.arrayTaintType != other.arrayTaintType)
 			return false;
-		
-		if (!Arrays.equals(fields, other.fields))
-			return false;
-		if (!Arrays.equals(fieldTypes, other.fieldTypes))
+
+		if (this.canHaveImmutableAliases != other.canHaveImmutableAliases)
 			return false;
 		
 		assert this.hashCode() == obj.hashCode();
@@ -503,6 +244,12 @@ public class AccessPath implements Cloneable {
 				}
 		if (taintSubFields)
 			str += " *";
+		
+		if (arrayTaintType == ArrayTaintType.ContentsAndLength)
+			str += " <+length>";
+		else if (arrayTaintType == ArrayTaintType.Length)
+			str += " <length>";
+		
 		return str;
 	}
 
@@ -516,13 +263,42 @@ public class AccessPath implements Cloneable {
 	 * @return This access path with the base replaced by the value given in
 	 * the val parameter
 	 */
-	public AccessPath copyWithNewValue(Value val, Type newType, boolean cutFirstField){
+	public AccessPath copyWithNewValue(Value val, Type newType,
+			boolean cutFirstField){
+		return copyWithNewValue(val, newType, cutFirstField, true);
+	}
+	
+	/**
+	 * value val gets new base, fields are preserved.
+	 * @param val The new base value
+	 * @param reduceBases True if circurlar types shall be reduced to bases
+	 * @return This access path with the base replaced by the value given in
+	 * the val parameter
+	 */
+	public AccessPath copyWithNewValue(Value val, Type newType,
+			boolean cutFirstField, boolean reduceBases) {
+		return copyWithNewValue(val, newType, cutFirstField,
+				reduceBases, arrayTaintType);
+	}
+	
+	/**
+	 * value val gets new base, fields are preserved.
+	 * @param val The new base value
+	 * @param reduceBases True if circular types shall be reduced to bases
+	 * @param arrayTaintType The way a tainted array shall be handled
+	 * @return This access path with the base replaced by the value given in
+	 * the val parameter
+	 */
+	public AccessPath copyWithNewValue(Value val, Type newType, boolean cutFirstField,
+			boolean reduceBases, ArrayTaintType arrayTaintType) {
 		if (this.value != null && this.value.equals(val)
-				&& this.baseType.equals(newType))
+				&& this.baseType.equals(newType)
+				&& this.arrayTaintType == arrayTaintType)
 			return this;
 		
-		return new AccessPath(val, fields, newType, fieldTypes, this.taintSubFields,
-				cutFirstField, true);
+		return AccessPathFactory.v().createAccessPath(val, fields, newType,
+				fieldTypes, this.taintSubFields,
+				cutFirstField, reduceBases, arrayTaintType, this.canHaveImmutableAliases);
 	}
 	
 	@Override
@@ -530,8 +306,9 @@ public class AccessPath implements Cloneable {
 		// The empty access path is a singleton
 		if (this == emptyAccessPath)
 			return this;
-
-		AccessPath a = new AccessPath(value, fields, baseType, fieldTypes, taintSubFields);
+		
+		AccessPath a = new AccessPath(value, fields, baseType, fieldTypes,
+				taintSubFields, cutOffApproximation, arrayTaintType, canHaveImmutableAliases);
 		assert a.equals(this);
 		return a;
 	}
@@ -610,7 +387,8 @@ public class AccessPath implements Cloneable {
 			System.arraycopy(apFieldTypes, 0, fieldTypes, offset, apFieldTypes.length);
 		}
 		
-		return new AccessPath(this.value, fields, baseType, fieldTypes, taintSubFields);
+		return AccessPathFactory.v().createAccessPath(this.value, fields, baseType,
+				fieldTypes, taintSubFields, false, true, arrayTaintType);
 	}
 	
 	/**
@@ -635,7 +413,8 @@ public class AccessPath implements Cloneable {
 			newFields = null;
 			newTypes = null;
 		}
-		return new AccessPath(value, newFields, fieldTypes[0], newTypes, taintSubFields);		
+		return AccessPathFactory.v().createAccessPath(value, newFields, fieldTypes[0],
+				newTypes, taintSubFields, false, true, arrayTaintType);		
 	}
 	
 	/**
@@ -660,7 +439,8 @@ public class AccessPath implements Cloneable {
 			newFields = null;
 			newTypes = null;
 		}
-		return new AccessPath(value, newFields, baseType, newTypes, taintSubFields);
+		return new AccessPath(value, newFields, baseType, newTypes,
+				taintSubFields, cutOffApproximation, arrayTaintType, canHaveImmutableAliases);
 	}
 	
 	/**
@@ -689,6 +469,51 @@ public class AccessPath implements Cloneable {
 	 */
 	public boolean isCutOffApproximation() {
 		return this.cutOffApproximation;
+	}
+	
+	/**
+	 * Gets whether this access path references only the length of the array to
+	 * which it points, not the contents of that array
+	 * @return True if this access paths points refers to the length of an array
+	 * instead of to its contents
+	 */
+	public ArrayTaintType getArrayTaintType() {
+		return this.arrayTaintType;
+	}
+	
+	/**
+	 * Checks whether this access path starts with the given value
+	 * @param val The value that is a potential prefix of the current access path
+	 * @return True if this access paths with the given value (i.e., the given
+	 * value is a prefix of this access path), otherwise false
+	 */
+	public boolean startsWith(Value val) {
+		// Filter out constants, etc.
+		if (!canContainValue(val))
+			return false;
+		
+		// Check the different types of values we can have
+		if (val instanceof Local && this.value == val)
+			return true;
+		else if (val instanceof StaticFieldRef)
+			return this.value == null && this.fields != null && this.fields.length > 0
+					&& this.fields[0] == ((StaticFieldRef) val).getField();
+		else if (val instanceof InstanceFieldRef) {
+			InstanceFieldRef iref = (InstanceFieldRef) val;
+			return this.value == iref.getBase() && this.fields != null
+					&& this.fields.length > 0 && this.fields[0] == iref.getField();
+		}
+		else
+			// Some unsupported value type
+			return false;
+	}
+
+	/**
+	 * Returns whether the tainted object can have immutable aliases.
+	 * @return true if the tainted object can have immutable aliases.
+	 */
+	public boolean getCanHaveImmutableAliases() {
+		return canHaveImmutableAliases;
 	}
 	
 }

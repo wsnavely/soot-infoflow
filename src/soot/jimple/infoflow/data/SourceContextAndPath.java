@@ -7,7 +7,7 @@ import java.util.Collections;
 import java.util.List;
 
 import soot.jimple.Stmt;
-import soot.jimple.infoflow.Infoflow;
+import soot.jimple.infoflow.InfoflowConfiguration;
 
 /**
  * Extension of {@link SourceContext} that also allows a paths from the source
@@ -16,11 +16,12 @@ import soot.jimple.infoflow.Infoflow;
  * @author Steven Arzt
  */
 public class SourceContextAndPath extends SourceContext implements Cloneable {
-	private List<Abstraction> path = null;
-	private List<Stmt> callStack = null;
+	protected List<Abstraction> path = null;
+	protected List<Stmt> callStack = null;
+	protected int neighborCounter = 0;
 	private int hashCode = 0;
 	
-	public SourceContextAndPath(AccessPath value, Stmt stmt) {
+	public SourceContextAndPath(AccessPath value, Stmt stmt) {	
 		this(value, stmt, null);
 	}
 	
@@ -29,8 +30,7 @@ public class SourceContextAndPath extends SourceContext implements Cloneable {
 	}
 	
 	public List<Abstraction> getAbstractionPath() {
-		return path == null ? Collections.<Abstraction>emptyList()
-				: Collections.unmodifiableList(this.path);		
+		return path;
 	}
 	
 	public List<Stmt> getPath() {
@@ -76,14 +76,40 @@ public class SourceContextAndPath extends SourceContext implements Cloneable {
 		if (abs.getCorrespondingCallSite() == null && !trackPath)
 			return this;
 		
-		// Do not add the very same abstraction over and over again
-		if (this.path != null)
-			for (Abstraction a : this.path)
-				if (a == abs)
-					return null;
-		
-		SourceContextAndPath scap = clone();
+		SourceContextAndPath scap = null;
 		if (trackPath && abs.getCurrentStmt() != null) {
+			// Do not add the very same abstraction over and over again. We clone
+			// the data object first to ensure a stable state.
+			scap = this.clone();
+			if (this.path != null) {
+				for (Abstraction a : scap.path) {
+					if (a == abs)
+						return null;
+					
+					// Do not run into loops. If we come back to the same
+					// abstraction, we don't got on with a neighbor
+					if (a.getNeighbors() != null && a.getNeighbors().contains(abs))
+						return null;
+					
+					// If this is exactly the same abstraction as one we have seen
+					// before, we skip it. Otherwise, we would run through loops
+					// infinitely.
+					if (a.equals(abs)
+							&& a.getCurrentStmt() == abs.getCurrentStmt()
+							&& a.getCorrespondingCallSite() == abs.getCorrespondingCallSite())
+						return null;
+				}
+				
+				// We cannot leave the same method at two different sites
+				Abstraction topAbs = scap.path.get(0);
+				if (topAbs.equals(abs)
+						&& topAbs.getCorrespondingCallSite() != null
+						&& topAbs.getCorrespondingCallSite() == abs.getCorrespondingCallSite()
+						&& topAbs.getCurrentStmt() != abs.getCurrentStmt())
+					return null;
+			}
+			
+			// Extend the propagation path
 			if (scap.path == null)
 				scap.path = new ArrayList<Abstraction>();
 			scap.path.add(0, abs);
@@ -92,12 +118,15 @@ public class SourceContextAndPath extends SourceContext implements Cloneable {
 		// Extend the call stack
 		if (abs.getCorrespondingCallSite() != null
 				&& abs.getCorrespondingCallSite() != abs.getCurrentStmt()) {
+			if (scap == null)
+				scap = this.clone();
 			if (scap.callStack == null)
 				scap.callStack = new ArrayList<Stmt>();
 			scap.callStack.add(0, abs.getCorrespondingCallSite());
 		}
 		
-		return scap;
+		this.neighborCounter = abs.getNeighbors() == null ? 0 : abs.getNeighbors().size();
+		return scap == null ? this : scap;
 	}
 	
 	/**
@@ -112,6 +141,23 @@ public class SourceContextAndPath extends SourceContext implements Cloneable {
 		
 		SourceContextAndPath scap = clone();
 		return new Pair<>(scap, scap.callStack.remove(0));
+	}
+	
+	/**
+	 * Gets whether the current call stack is empty, i.e., the path is in the
+	 * method from which it originated
+	 * @return True if the call stack is empty, otherwise false
+	 */
+	public boolean isCallStackEmpty() {
+		return this.callStack == null || this.callStack.isEmpty();
+	}
+	
+	public void setNeighborCounter(int counter) {
+		this.neighborCounter = counter;
+	}
+	
+	public int getNeighborCounter() {
+		return this.neighborCounter;
 	}
 	
 	@Override
@@ -131,9 +177,11 @@ public class SourceContextAndPath extends SourceContext implements Cloneable {
 		}
 		else if (!this.callStack.equals(scap.callStack))
 			return false;
-		
-		if (!Infoflow.getPathAgnosticResults() && !this.path.equals(scap.path))
-			return false;
+			
+		if (!InfoflowConfiguration.getPathAgnosticResults()) {	
+			if (!this.path.equals(scap.path))
+				return false;
+		}
 		
 		return super.equals(other);
 	}
@@ -144,7 +192,7 @@ public class SourceContextAndPath extends SourceContext implements Cloneable {
 			return hashCode;
 		
 		synchronized(this) {
-			hashCode = (!Infoflow.getPathAgnosticResults() ? 31 * (path == null ? 0 : path.hashCode()) : 0)
+			hashCode = (!InfoflowConfiguration.getPathAgnosticResults() ? 31 * (path == null ? 0 : path.hashCode()) : 0)
 					+ 31 * (callStack == null ? 0 : callStack.hashCode())
 					+ 31 * super.hashCode();
 		}

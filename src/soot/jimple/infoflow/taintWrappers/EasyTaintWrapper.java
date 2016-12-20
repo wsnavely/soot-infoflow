@@ -36,8 +36,11 @@ import soot.jimple.DefinitionStmt;
 import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
+import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AccessPath;
+import soot.jimple.infoflow.data.AccessPathFactory;
 import soot.jimple.infoflow.util.SootMethodRepresentationParser;
+import soot.jimple.infoflow.util.SystemClassHandler;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -182,8 +185,13 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 		final SootMethod method = stmt.getInvokeExpr().getMethod();
 		
 		// If the callee is a phantom class or has no body, we pass on the taint
-		if (method.isPhantom() || !method.hasActiveBody())
-			taints.add(taintedPath);
+		if (method.isPhantom() || !method.hasActiveBody()) {
+			// Exception: Tainted value is overwritten
+			if (!(!taintedPath.isStaticFieldRef()
+					&& stmt instanceof DefinitionStmt
+					&& ((DefinitionStmt) stmt).getLeftOp() == taintedPath.getPlainValue()))
+				taints.add(taintedPath);
+		}
 		
 		// For the moment, we don't implement static taints on wrappers. Pass it on
 		// not to break anything
@@ -228,10 +236,11 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 				// tainted values
 				if (stmt instanceof DefinitionStmt) {
 					DefinitionStmt def = (DefinitionStmt) stmt;
-
+					
 					// Check for exclusions
-					if (wrapType != MethodWrapType.Exclude)
-						taints.add(new AccessPath(def.getLeftOp(), true));
+					if (wrapType != MethodWrapType.Exclude
+							&& SystemClassHandler.isTaintVisible(taintedPath, method))
+						taints.add(AccessPathFactory.v().createAccessPath(def.getLeftOp(), true));
 				}
 
 				// If the base object is tainted, we pass this taint on
@@ -239,7 +248,8 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 			}
 		}
 				
-		//if param is tainted && classList contains classname && if list. contains signature of method -> add propagation
+		//if param is tainted && classList contains classname && if list. contains
+		// signature of method -> add propagation
 		if (isSupported && wrapType == MethodWrapType.CreateTaint) {
 			// If we are inside a conditional, we always taint
 			boolean doTaint = taintedPath.isEmpty();
@@ -262,11 +272,12 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 				// If make sure to also taint the left side of an assignment
 				// if the object just got tainted 
 				if (stmt instanceof DefinitionStmt)
-					taints.add(new AccessPath(((DefinitionStmt) stmt).getLeftOp(), true));
+					taints.add(AccessPathFactory.v().createAccessPath(((DefinitionStmt) stmt).getLeftOp(), true));
 				
 				// Taint the base object
 				if (stmt.getInvokeExprBox().getValue() instanceof InstanceInvokeExpr)
-					taints.add(new AccessPath(((InstanceInvokeExpr) stmt.getInvokeExprBox().getValue()).getBase(), true));
+					taints.add(AccessPathFactory.v().createAccessPath(((InstanceInvokeExpr)
+							stmt.getInvokeExprBox().getValue()).getBase(), true));
 				
 				// The originally tainted parameter or base object as such
 				// stays tainted
@@ -289,8 +300,8 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 		// If the base object is tainted, the third argument gets tainted as
 		// well
 		if (((InstanceInvokeExpr) invokeExpr).getBase() == taintedPath.getPlainValue())
-			return new TwoElementSet<AccessPath>(taintedPath, new AccessPath(
-					invokeExpr.getArg(2), true));
+			return new TwoElementSet<AccessPath>(taintedPath,
+					AccessPathFactory.v().createAccessPath(invokeExpr.getArg(2), true));
 		return Collections.singleton(taintedPath);
 	}
 
@@ -417,7 +428,7 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 		SootMethod method = stmt.getInvokeExpr().getMethod();
 		
 		// Do we have an entry for at least one entry in the given class?
-		if (hasWrappedMethodsForClass(method.getDeclaringClass(), true, true, true))
+		if (hasWrappedMethodsForClass(method.getDeclaringClass(), true, true, false))
 			return true;
 
 		// In aggressive mode, we always taint the return value if the base
@@ -547,6 +558,13 @@ public class EasyTaintWrapper extends AbstractTaintWrapper implements Cloneable 
 			if (!(val instanceof Constant))
 				return true;
 		return false;
+	}
+
+	@Override
+	public Set<Abstraction> getAliasesForMethod(Stmt stmt, Abstraction d1,
+			Abstraction taintedPath) {
+		// We do not provide any aliases
+		return null;
 	}
 		
 }

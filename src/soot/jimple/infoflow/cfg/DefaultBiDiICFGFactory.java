@@ -8,11 +8,20 @@ package soot.jimple.infoflow.cfg;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import soot.Body;
 import soot.Scene;
-import soot.jimple.infoflow.IInfoflow.CallgraphAlgorithm;
+import soot.SootMethod;
+import soot.Unit;
+import soot.dexpler.DalvikThrowAnalysis;
+import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.infoflow.solver.cfg.InfoflowCFG;
+import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
+import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
 import soot.jimple.toolkits.ide.icfg.OnTheFlyJimpleBasedICFG;
+import soot.toolkits.graph.BriefUnitGraph;
+import soot.toolkits.graph.DirectedGraph;
+import soot.toolkits.graph.ExceptionalUnitGraph;
 
 /**
  * Default factory for bidirectional interprocedural CFGs
@@ -24,8 +33,11 @@ public class DefaultBiDiICFGFactory implements BiDirICFGFactory {
 	
     private final Logger logger = LoggerFactory.getLogger(getClass());
     
+    private boolean isAndroid = false;
+    
     @Override
-    public IInfoflowCFG buildBiDirICFG(CallgraphAlgorithm callgraphAlgorithm){
+    public IInfoflowCFG buildBiDirICFG(CallgraphAlgorithm callgraphAlgorithm,
+    		boolean enableExceptions) {
     	if (callgraphAlgorithm == CallgraphAlgorithm.OnDemand) {
     		// Load all classes on the classpath to signatures
     		long beforeClassLoading = System.nanoTime();
@@ -43,6 +55,33 @@ public class DefaultBiDiICFGFactory implements BiDirICFGFactory {
 
     		return cfg;
     	}
-        return new InfoflowCFG();
+    	
+    	// If we are running on Android, we need to use a different throw analysis
+    	BiDiInterproceduralCFG<Unit, SootMethod> baseCFG = null;
+    	if (isAndroid) {
+    		baseCFG = new JimpleBasedInterproceduralCFG(enableExceptions) {
+    			
+    			protected DirectedGraph<Unit> makeGraph(Body body) {
+    				return enableExceptions
+    						? new ExceptionalUnitGraph(body, DalvikThrowAnalysis.interproc(), true)
+    						: new BriefUnitGraph(body);
+    			}
+    			
+    		};
+    	}
+    	else
+    		baseCFG = new JimpleBasedInterproceduralCFG(enableExceptions);
+    	
+        return new InfoflowCFG(baseCFG);
     }
+    
+    /**
+     * Sets whether this CFG will be used to analyze Android apps
+     * @param isAndroid True if the CFG will be used to analyze Android apps,
+     * otherwise false
+     */
+    public void setIsAndroid(boolean isAndroid) {
+    	this.isAndroid = isAndroid;
+    }
+    
 }

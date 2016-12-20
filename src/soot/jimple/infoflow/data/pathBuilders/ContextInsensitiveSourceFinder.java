@@ -1,18 +1,13 @@
 package soot.jimple.infoflow.data.pathBuilders;
 
-import heros.solver.CountingThreadPoolExecutor;
-
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import soot.jimple.Stmt;
+import heros.solver.CountingThreadPoolExecutor;
 import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AbstractionAtSink;
 import soot.jimple.infoflow.results.InfoflowResults;
@@ -30,30 +25,18 @@ public class ContextInsensitiveSourceFinder extends AbstractAbstractionPathBuild
     private final InfoflowResults results = new InfoflowResults();
 	private final CountingThreadPoolExecutor executor;
 	
-	private static int lastTaskId = 0;
+	private int lastTaskId = 0;
 	private int numTasks = 0;
 	
 	/**
 	 * Creates a new instance of the {@link ContextInsensitiveSourceFinder} class
 	 * @param icfg The interprocedural control flow graph
+	 * @param executor The executor in which to run the path reconstruction tasks
 	 * @param maxThreadNum The maximum number of threads to use
 	 */
-	public ContextInsensitiveSourceFinder(IInfoflowCFG icfg, int maxThreadNum) {
+	public ContextInsensitiveSourceFinder(IInfoflowCFG icfg, CountingThreadPoolExecutor executor) {
 		super(icfg, false);
-        int numThreads = Runtime.getRuntime().availableProcessors();
-		this.executor = createExecutor(maxThreadNum == -1 ? numThreads
-				: Math.min(maxThreadNum, numThreads));
-	}
-	
-	/**
-	 * Creates a new executor object for spawning worker threads
-	 * @param numThreads The number of threads to use
-	 * @return The generated executor
-	 */
-	private CountingThreadPoolExecutor createExecutor(int numThreads) {
-		return new CountingThreadPoolExecutor
-				(numThreads, Integer.MAX_VALUE, 30, TimeUnit.SECONDS,
-				new LinkedBlockingQueue<Runnable>());
+		this.executor = executor;
 	}
 	
 	/**
@@ -70,6 +53,7 @@ public class ContextInsensitiveSourceFinder extends AbstractAbstractionPathBuild
 			this.taskId = taskId;
 			this.flagAbs = flagAbs;
 			this.abstractionQueue.add(abstraction);
+			abstraction.registerPathFlag(taskId, numTasks);
 		}
 		
 		@Override
@@ -84,7 +68,7 @@ public class ContextInsensitiveSourceFinder extends AbstractAbstractionPathBuild
 							abstraction.getSourceContext().getAccessPath(),
 							abstraction.getSourceContext().getStmt(),
 							abstraction.getSourceContext().getUserData(),
-							Collections.<Stmt>emptyList());
+							null);
 					
 					// Sources may not have predecessors
 					assert abstraction.getPredecessor() == null;
@@ -113,7 +97,7 @@ public class ContextInsensitiveSourceFinder extends AbstractAbstractionPathBuild
     	int curResIdx = 0;
     	numTasks = res.size() + 1;
     	for (final AbstractionAtSink abs : res) {
-    		logger.info("Building path " + ++curResIdx);
+    		logger.info("Building path " + ++curResIdx + " with task id " + lastTaskId);
     		executor.execute(new SourceFindingTask(lastTaskId++, abs, abs.getAbstraction()));
     	}
 
@@ -129,13 +113,13 @@ public class ContextInsensitiveSourceFinder extends AbstractAbstractionPathBuild
 	}
 	
 	@Override
-	public void shutdown() {
-    	executor.shutdown();		
+	public InfoflowResults getResults() {
+		return this.results;
 	}
 
 	@Override
-	public InfoflowResults getResults() {
-		return this.results;
+	public void runIncrementalPathCompuation() {
+		// not implemented
 	}
 
 }

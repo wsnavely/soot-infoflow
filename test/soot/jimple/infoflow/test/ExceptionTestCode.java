@@ -86,5 +86,111 @@ public class ExceptionTestCode {
 			cm.publish(ex.getMessage());
 		}
 	}
+	
+	public void disabledExceptionTest() {
+		String imei = TelephonyManager.getDeviceId();
+		try {
+			throw new RuntimeException();
+		}
+		catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(imei);		
+	}
+	
+	private class Data {
+		public String imei;
+	}
+	
+	public void callMethodParamReturnTest1() {
+		Data data = new Data();
+		data.imei = TelephonyManager.getDeviceId();
+		data = setAndReturn1(data);
+		ConnectionManager cm = new ConnectionManager();
+		cm.publish(data.imei);
+	}
+
+	private Data setAndReturn1(Data data) {
+		String s = data.imei;
+		data.imei = "";
+		
+		Data d = new Data();
+		d.imei = s;
+		return d;
+	}
+	
+	public void callMethodParamReturnTest2() {
+		Data data = new Data();
+		data.imei = TelephonyManager.getDeviceId();
+		try {
+			data = setAndReturn2(data);
+		}
+		finally {
+			ConnectionManager cm = new ConnectionManager();
+			cm.publish(data.imei);
+		}
+	}
+
+	private Data setAndReturn2(Data data) {
+		String s = data.imei;
+		data.imei = "";
+		
+		// cause an exception
+		data.imei.substring(-10, -1);
+		
+		Data d = new Data();
+		d.imei = s;
+		return d;
+	}
+
+	public void callMethodParamReturnTest2b() {
+		Data data = new Data();
+		data.imei = "";
+		try {
+			data = setAndReturn2b(data);
+		}
+		finally {
+			ConnectionManager cm = new ConnectionManager();
+			cm.publish(data.imei);
+		}
+	}
+
+	private Data setAndReturn2b(Data data) {
+		String s = data.imei;
+		data.imei = TelephonyManager.getDeviceId();
+		
+		// cause an exception
+		data.imei.substring(-10, -1);
+		
+		Data d = new Data();
+		d.imei = s;
+		return d;
+	}
+
+	public void callMethodParamReturnTest3() {
+		Data data = new Data();
+		data.imei = TelephonyManager.getDeviceId();
+		try {
+			data = setAndReturn3(data);
+		}
+		finally {
+			ConnectionManager cm = new ConnectionManager();
+			cm.publish(data.imei);
+		}
+	}
+
+	private Data setAndReturn3(Data data) {
+		String s = data.imei;
+		
+		// cause an exception
+		data.imei.substring(-10, -1);
+
+		data.imei = "";
+				
+		Data d = new Data();
+		d.imei = s;
+		return d;
+	}
 
 }

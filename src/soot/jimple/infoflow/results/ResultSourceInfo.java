@@ -3,7 +3,7 @@ package soot.jimple.infoflow.results;
 import java.util.List;
 
 import soot.jimple.Stmt;
-import soot.jimple.infoflow.Infoflow;
+import soot.jimple.infoflow.InfoflowConfiguration;
 import soot.jimple.infoflow.data.AccessPath;
 import soot.tagkit.LineNumberTag;
 
@@ -16,7 +16,8 @@ public class ResultSourceInfo {
 	private final AccessPath accessPath;
 	private final Stmt source;
 	private final Object userData;
-	private final List<Stmt> path;
+	private final Stmt[] path;
+	private final AccessPath[] pathAPs;
 	
 	public ResultSourceInfo(AccessPath source, Stmt context) {
 		assert source != null;
@@ -25,15 +26,20 @@ public class ResultSourceInfo {
 		this.source = context;
 		this.userData = null;
 		this.path = null;
+		this.pathAPs = null;
 	}
 	
-	public ResultSourceInfo(AccessPath source, Stmt context, Object userData, List<Stmt> path) {
+	public ResultSourceInfo(AccessPath source, Stmt context, Object userData,
+			List<Stmt> path, List<AccessPath> pathAPs) {
 		assert source != null;
 
 		this.accessPath = source;
 		this.source = context;
 		this.userData = userData;
-		this.path = path;
+		this.path = path == null || path.isEmpty() ? null :
+			path.toArray(new Stmt[path.size()]);
+		this.pathAPs = pathAPs == null || pathAPs.isEmpty() ? null :
+			pathAPs.toArray(new AccessPath[pathAPs.size()]);
 	}
 
 	public AccessPath getAccessPath() {
@@ -48,8 +54,12 @@ public class ResultSourceInfo {
 		return this.userData;
 	}
 	
-	public List<Stmt> getPath() {
+	public Stmt[] getPath() {
 		return this.path;
+	}
+	
+	public AccessPath[] getPathAccessPaths() {
+		return this.pathAPs;
 	}
 
     @Override
@@ -64,8 +74,9 @@ public class ResultSourceInfo {
 
 	@Override
 	public int hashCode() {
-		return (path != null && !Infoflow.getPathAgnosticResults() ? 31 * this.path.hashCode() : 0)
-				+ (Infoflow.getOneResultPerAccessPath() ?
+		return (path != null && !InfoflowConfiguration.getPathAgnosticResults() ? 31 * this.path.hashCode() : 0)
+				+ (pathAPs != null && !InfoflowConfiguration.getPathAgnosticResults() ? 31 * this.pathAPs.hashCode() : 0)
+				+ (InfoflowConfiguration.getOneResultPerAccessPath() ?
 						31 * this.accessPath.hashCode() : 0)
 				+ 7 * (this.source == null ? 0 : this.source.hashCode());
 	}
@@ -78,12 +89,19 @@ public class ResultSourceInfo {
 			return false;
 		ResultSourceInfo si = (ResultSourceInfo) o;
 		
-		if (!Infoflow.getPathAgnosticResults()) {
-			if (path == null && si.path != null)
+		if (!InfoflowConfiguration.getPathAgnosticResults()) {
+			if (this.path == null) {
+				if (si.path != null)
+					return false;
+			}
+			else if (!this.path.equals(si.path))
 				return false;
-			if (path != null && si.path == null)
-				return false;
-			if (!path.equals(si.path))
+			
+			if (this.pathAPs == null) {
+				if (si.pathAPs != null)
+					return false;
+			}
+			else if (!pathAPs.equals(si.pathAPs))
 				return false;
 		}
 		
@@ -94,7 +112,7 @@ public class ResultSourceInfo {
 		else if (!this.source.equals(si.source))
 			return false;
 		
-		return !Infoflow.getOneResultPerAccessPath()
+		return !InfoflowConfiguration.getOneResultPerAccessPath()
 				|| this.accessPath.equals(si.accessPath);
 	}
 }
