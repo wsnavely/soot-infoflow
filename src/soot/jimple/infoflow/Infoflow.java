@@ -32,6 +32,7 @@ import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
+import soot.jimple.JimpleBody;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
 import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
@@ -74,40 +75,47 @@ import soot.jimple.infoflow.util.SystemClassHandler;
 import soot.jimple.internal.AbstractInvokeExpr;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.options.Options;
+
 /**
- * main infoflow class which triggers the analysis and offers method to customize it.
+ * main infoflow class which triggers the analysis and offers method to
+ * customize it.
  *
  */
 public class Infoflow extends AbstractInfoflow {
 
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+	private final Logger logger = LoggerFactory.getLogger(getClass());
 
 	private InfoflowResults results = null;
-    private IInfoflowCFG iCfg;
+	private IInfoflowCFG iCfg;
 
-    private Set<ResultsAvailableHandler> onResultsAvailable = new HashSet<ResultsAvailableHandler>();
-    private TaintPropagationHandler taintPropagationHandler = null;
-    private TaintPropagationHandler backwardsPropagationHandler = null;
+	private Set<ResultsAvailableHandler> onResultsAvailable = new HashSet<ResultsAvailableHandler>();
+	private TaintPropagationHandler taintPropagationHandler = null;
+	private TaintPropagationHandler backwardsPropagationHandler = null;
 
-    private long maxMemoryConsumption = -1;
+	private long maxMemoryConsumption = -1;
 
-    private Set<Stmt> collectedSources = null;
-    private Set<Stmt> collectedSinks = null;
+	private Set<Stmt> collectedSources = null;
+	private Set<Stmt> collectedSinks = null;
 
 	/**
-	 * Creates a new instance of the InfoFlow class for analyzing plain Java code without any references to APKs or the Android SDK.
+	 * Creates a new instance of the InfoFlow class for analyzing plain Java
+	 * code without any references to APKs or the Android SDK.
 	 */
 	public Infoflow() {
 		super();
 	}
 
 	/**
-	 * Creates a new instance of the Infoflow class for analyzing Android APK files.
-	 * @param androidPath If forceAndroidJar is false, this is the base directory
-	 * of the platform files in the Android SDK. If forceAndroidJar is true, this
-	 * is the full path of a single android.jar file.
-	 * @param forceAndroidJar True if a single platform JAR file shall be forced,
-	 * false if Soot shall pick the appropriate platform version
+	 * Creates a new instance of the Infoflow class for analyzing Android APK
+	 * files.
+	 * 
+	 * @param androidPath
+	 *            If forceAndroidJar is false, this is the base directory of the
+	 *            platform files in the Android SDK. If forceAndroidJar is true,
+	 *            this is the full path of a single android.jar file.
+	 * @param forceAndroidJar
+	 *            True if a single platform JAR file shall be forced, false if
+	 *            Soot shall pick the appropriate platform version
 	 */
 	public Infoflow(String androidPath, boolean forceAndroidJar) {
 		super(null, androidPath, forceAndroidJar);
@@ -115,26 +123,29 @@ public class Infoflow extends AbstractInfoflow {
 	}
 
 	/**
-	 * Creates a new instance of the Infoflow class for analyzing Android APK files.
-	 * @param androidPath If forceAndroidJar is false, this is the base directory
-	 * of the platform files in the Android SDK. If forceAndroidJar is true, this
-	 * is the full path of a single android.jar file.
-	 * @param forceAndroidJar True if a single platform JAR file shall be forced,
-	 * false if Soot shall pick the appropriate platform version
-	 * @param icfgFactory The interprocedural CFG to be used by the InfoFlowProblem
-	 * @param pathBuilderFactory The factory class for constructing a path builder
-	 * algorithm
+	 * Creates a new instance of the Infoflow class for analyzing Android APK
+	 * files.
+	 * 
+	 * @param androidPath
+	 *            If forceAndroidJar is false, this is the base directory of the
+	 *            platform files in the Android SDK. If forceAndroidJar is true,
+	 *            this is the full path of a single android.jar file.
+	 * @param forceAndroidJar
+	 *            True if a single platform JAR file shall be forced, false if
+	 *            Soot shall pick the appropriate platform version
+	 * @param icfgFactory
+	 *            The interprocedural CFG to be used by the InfoFlowProblem
+	 * @param pathBuilderFactory
+	 *            The factory class for constructing a path builder algorithm
 	 */
 	public Infoflow(String androidPath, boolean forceAndroidJar, BiDirICFGFactory icfgFactory,
 			IPathBuilderFactory pathBuilderFactory) {
 		super(icfgFactory, androidPath, forceAndroidJar);
-		this.pathBuilderFactory = pathBuilderFactory == null ? new DefaultPathBuilderFactory()
-				: pathBuilderFactory;
+		this.pathBuilderFactory = pathBuilderFactory == null ? new DefaultPathBuilderFactory() : pathBuilderFactory;
 	}
 
 	@Override
-	public void computeInfoflow(String appPath, String libPath,
-			IEntryPointCreator entryPointCreator,
+	public void computeInfoflow(String appPath, String libPath, IEntryPointCreator entryPointCreator,
 			ISourceSinkManager sourcesSinks) {
 		if (sourcesSinks == null) {
 			logger.error("Sources are empty!");
@@ -143,27 +154,27 @@ public class Infoflow extends AbstractInfoflow {
 
 		initializeSoot(appPath, libPath, entryPointCreator.getRequiredClasses());
 
-		// entryPoints are the entryPoints required by Soot to calculate Graph - if there is no main method,
-		// we have to create a new main method and use it as entryPoint and store our real entryPoints
+		// entryPoints are the entryPoints required by Soot to calculate Graph -
+		// if there is no main method,
+		// we have to create a new main method and use it as entryPoint and
+		// store our real entryPoints
 		Scene.v().setEntryPoints(Collections.singletonList(entryPointCreator.createDummyMain()));
 
 		// Run the analysis
-        runAnalysis(sourcesSinks, null);
+		runAnalysis(sourcesSinks, null);
 	}
 
 	@Override
-	public void computeInfoflow(String appPath, String libPath, String entryPoint,
-			ISourceSinkManager sourcesSinks) {
+	public void computeInfoflow(String appPath, String libPath, String entryPoint, ISourceSinkManager sourcesSinks) {
 		if (sourcesSinks == null) {
 			logger.error("Sources are empty!");
 			return;
 		}
 
-		initializeSoot(appPath, libPath,
-				SootMethodRepresentationParser.v().parseClassNames
-					(Collections.singletonList(entryPoint), false).keySet(), entryPoint);
+		initializeSoot(appPath, libPath, SootMethodRepresentationParser.v()
+				.parseClassNames(Collections.singletonList(entryPoint), false).keySet(), entryPoint);
 
-		if (!Scene.v().containsMethod(entryPoint)){
+		if (!Scene.v().containsMethod(entryPoint)) {
 			logger.error("Entry point not found: " + entryPoint);
 			return;
 		}
@@ -184,12 +195,14 @@ public class Infoflow extends AbstractInfoflow {
 		ipcManager.updateJimpleForICC();
 
 		// Run the analysis
-        runAnalysis(sourcesSinks, seeds);
+		runAnalysis(sourcesSinks, seeds);
 	}
 
 	/**
 	 * Conducts a taint analysis on an already initialized callgraph
-	 * @param sourcesSinks The sources and sinks to be used
+	 * 
+	 * @param sourcesSinks
+	 *            The sources and sinks to be used
 	 */
 	protected void runAnalysis(final ISourceSinkManager sourcesSinks) {
 		runAnalysis(sourcesSinks, null);
@@ -197,9 +210,12 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Conducts a taint analysis on an already initialized callgraph
-	 * @param sourcesSinks The sources and sinks to be used
-	 * @param additionalSeeds Additional seeds at which to create A ZERO fact
-	 * even if they are not sources
+	 * 
+	 * @param sourcesSinks
+	 *            The sources and sinks to be used
+	 * @param additionalSeeds
+	 *            Additional seeds at which to create A ZERO fact even if they
+	 *            are not sources
 	 */
 	private void runAnalysis(final ISourceSinkManager sourcesSinks, final Set<String> additionalSeeds) {
 		// Clear the data from previous runs
@@ -207,10 +223,8 @@ public class Infoflow extends AbstractInfoflow {
 		results = null;
 
 		// Some configuration options do not really make sense in combination
-		if (config.getEnableStaticFieldTracking()
-				&& InfoflowConfiguration.getAccessPathLength() == 0)
-			throw new RuntimeException("Static field tracking must be disabled "
-					+ "if the access path length is zero");
+		if (config.getEnableStaticFieldTracking() && InfoflowConfiguration.getAccessPathLength() == 0)
+			throw new RuntimeException("Static field tracking must be disabled " + "if the access path length is zero");
 		if (InfoflowConfiguration.getAccessPathLength() < 0)
 			throw new RuntimeException("The access path length may not be negative");
 
@@ -220,28 +234,25 @@ public class Infoflow extends AbstractInfoflow {
 		// Build the callgraph
 		long beforeCallgraph = System.nanoTime();
 		constructCallgraph();
-		logger.info("Callgraph construction took " + (System.nanoTime() - beforeCallgraph) / 1E9
-				+ " seconds");
+		logger.info("Callgraph construction took " + (System.nanoTime() - beforeCallgraph) / 1E9 + " seconds");
 
-        // Perform constant propagation and remove dead code
-        if (config.getCodeEliminationMode() != CodeEliminationMode.NoCodeElimination) {
+		// Perform constant propagation and remove dead code
+		if (config.getCodeEliminationMode() != CodeEliminationMode.NoCodeElimination) {
 			long currentMillis = System.nanoTime();
 			eliminateDeadCode(sourcesSinks);
-			logger.info("Dead code elimination took " + (System.nanoTime() - currentMillis) / 1E9
-					+ " seconds");
-        }
+			logger.info("Dead code elimination took " + (System.nanoTime() - currentMillis) / 1E9 + " seconds");
+		}
 
-        if (config.getCallgraphAlgorithm() != CallgraphAlgorithm.OnDemand)
-        	logger.info("Callgraph has {} edges", Scene.v().getCallGraph().size());
+		if (config.getCallgraphAlgorithm() != CallgraphAlgorithm.OnDemand)
+			logger.info("Callgraph has {} edges", Scene.v().getCallGraph().size());
 
 		if (!config.isTaintAnalysisEnabled()) {
 			return;
 		}
 		logger.info("Starting Taint Analysis");
-        iCfg = icfgFactory.buildBiDirICFG(config.getCallgraphAlgorithm(),
-        		config.getEnableExceptionTracking());
+		iCfg = icfgFactory.buildBiDirICFG(config.getCallgraphAlgorithm(), config.getEnableExceptionTracking());
 
-        int numThreads = Runtime.getRuntime().availableProcessors();
+		int numThreads = Runtime.getRuntime().availableProcessors();
 		CountingThreadPoolExecutor executor = createExecutor(numThreads);
 
 		// Initialize the memory manager
@@ -250,43 +261,39 @@ public class Infoflow extends AbstractInfoflow {
 			erasureMode = PathDataErasureMode.KeepOnlyContextData;
 		if (pathBuilderFactory.supportsPathReconstruction())
 			erasureMode = PathDataErasureMode.EraseNothing;
-		IMemoryManager<Abstraction> memoryManager = new FlowDroidMemoryManager(false,
-				erasureMode);
+		IMemoryManager<Abstraction> memoryManager = new FlowDroidMemoryManager(false, erasureMode);
 
 		// Initialize the data flow manager
-		InfoflowManager manager = new InfoflowManager(config, null, iCfg, sourcesSinks,
-				taintWrapper, hierarchy);
+		InfoflowManager manager = new InfoflowManager(config, null, iCfg, sourcesSinks, taintWrapper, hierarchy);
 
 		BackwardsInfoflowProblem backProblem = null;
 		InfoflowManager backwardsManager = null;
 		InfoflowSolver backSolver = null;
 		final IAliasingStrategy aliasingStrategy;
 		switch (getConfig().getAliasingAlgorithm()) {
-			case FlowSensitive:
-				backwardsManager = new InfoflowManager(config, null,
-						new BackwardsInfoflowCFG(iCfg), sourcesSinks, taintWrapper, hierarchy);
-				backProblem = new BackwardsInfoflowProblem(backwardsManager);
-				backSolver = new BackwardsInfoflowSolver(backProblem, executor);
-				backSolver.setMemoryManager(memoryManager);
-				backSolver.setJumpPredecessors(!pathBuilderFactory.supportsPathReconstruction());
-//				backSolver.setEnableMergePointChecking(true);
+		case FlowSensitive:
+			backwardsManager = new InfoflowManager(config, null, new BackwardsInfoflowCFG(iCfg), sourcesSinks,
+					taintWrapper, hierarchy);
+			backProblem = new BackwardsInfoflowProblem(backwardsManager);
+			backSolver = new BackwardsInfoflowSolver(backProblem, executor);
+			backSolver.setMemoryManager(memoryManager);
+			backSolver.setJumpPredecessors(!pathBuilderFactory.supportsPathReconstruction());
+			// backSolver.setEnableMergePointChecking(true);
 
-				aliasingStrategy = new FlowSensitiveAliasStrategy(iCfg, backSolver);
-				break;
-			case PtsBased:
-				backProblem = null;
-				backSolver = null;
-				aliasingStrategy = new PtsBasedAliasStrategy(iCfg);
-				break;
-			default:
-				throw new RuntimeException("Unsupported aliasing algorithm");
+			aliasingStrategy = new FlowSensitiveAliasStrategy(iCfg, backSolver);
+			break;
+		case PtsBased:
+			backProblem = null;
+			backSolver = null;
+			aliasingStrategy = new PtsBasedAliasStrategy(iCfg);
+			break;
+		default:
+			throw new RuntimeException("Unsupported aliasing algorithm");
 		}
 
 		// Get the zero fact
-		Abstraction zeroValue = backProblem != null
-				? backProblem.createZeroValue() : null;
-		InfoflowProblem forwardProblem  = new InfoflowProblem(manager,
-				aliasingStrategy, zeroValue);
+		Abstraction zeroValue = backProblem != null ? backProblem.createZeroValue() : null;
+		InfoflowProblem forwardProblem = new InfoflowProblem(manager, aliasingStrategy, zeroValue);
 
 		// Set the options
 		InfoflowSolver forwardSolver = new InfoflowSolver(forwardProblem, executor);
@@ -297,7 +304,7 @@ public class Infoflow extends AbstractInfoflow {
 
 		forwardSolver.setMemoryManager(memoryManager);
 		forwardSolver.setJumpPredecessors(!pathBuilderFactory.supportsPathReconstruction());
-//		forwardSolver.setEnableMergePointChecking(true);
+		// forwardSolver.setEnableMergePointChecking(true);
 
 		forwardProblem.setTaintPropagationHandler(taintPropagationHandler);
 		forwardProblem.setTaintWrapper(taintWrapper);
@@ -322,9 +329,9 @@ public class Infoflow extends AbstractInfoflow {
 		// We have to look through the complete program to find sources
 		// which are then taken as seeds.
 		int sinkCount = 0;
-        logger.info("Looking for sources and sinks...");
+		logger.info("Looking for sources and sinks...");
 
-        for (SootMethod sm : getMethodsForSeeds(iCfg))
+		for (SootMethod sm : getMethodsForSeeds(iCfg))
 			sinkCount += scanMethodForSourcesSinks(sourcesSinks, forwardProblem, sm);
 
 		// We optionally also allow additional seeds to be specified
@@ -356,22 +363,21 @@ public class Infoflow extends AbstractInfoflow {
 			taintWrapper.initialize(manager);
 		if (nativeCallHandler != null)
 			nativeCallHandler.initialize(manager);
-		
+
 		// Register the handler for interim results
 		TaintPropagationResults propagationResults = forwardProblem.getResults();
 		final CountingThreadPoolExecutor resultExecutor = createExecutor(numThreads);
-		final IAbstractionPathBuilder builder = pathBuilderFactory.createPathBuilder(
-				resultExecutor, iCfg);
-		
+		final IAbstractionPathBuilder builder = pathBuilderFactory.createPathBuilder(resultExecutor, iCfg);
+
 		if (config.getIncrementalResultReporting()) {
 			// Create the path builder
 			this.results = new InfoflowResults();
 			propagationResults.addResultAvailableHandler(new OnTaintPropagationResultAdded() {
-				
+
 				@Override
 				public boolean onResultAvailable(AbstractionAtSink abs) {
 					builder.addResultAvailableHandler(new OnPathBuilderResultAvailable() {
-						
+
 						@Override
 						public void onResultAvailable(ResultSourceInfo source, ResultSinkInfo sink) {
 							// Notify our external handlers
@@ -381,22 +387,22 @@ public class Infoflow extends AbstractInfoflow {
 									handler2.onSingleResultAvailable(source, sink);
 								}
 							}
-					   		results.addResult(sink, source);
+							results.addResult(sink, source);
 						}
-						
+
 					});
-					
+
 					// Compute the result paths
-			   		builder.computeTaintPaths(Collections.singleton(abs));
+					builder.computeTaintPaths(Collections.singleton(abs));
 					return true;
 				}
-				
+
 			});
 		}
 
 		forwardSolver.solve();
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
-		
+
 		// Not really nice, but sometimes Heros returns before all
 		// executor tasks are actually done. This way, we give it a
 		// chance to terminate gracefully before moving on.
@@ -406,17 +412,15 @@ public class Infoflow extends AbstractInfoflow {
 				terminateTries++;
 				try {
 					Thread.sleep(500);
-				}
-				catch (InterruptedException e) {
+				} catch (InterruptedException e) {
 					logger.error("Could not wait for executor termination", e);
 				}
-			}
-			else
+			} else
 				break;
 		}
 		if (executor.getActiveCount() != 0 || !executor.isTerminated())
 			logger.error("Executor did not terminate gracefully");
-		
+
 		// Print taint wrapper statistics
 		if (taintWrapper != null) {
 			logger.info("Taint wrapper hits: " + taintWrapper.getWrapperHits());
@@ -426,23 +430,20 @@ public class Infoflow extends AbstractInfoflow {
 		Set<AbstractionAtSink> res = propagationResults.getResults();
 
 		// We need to prune access paths that are entailed by another one
-		for (Iterator<AbstractionAtSink> absAtSinkIt = res.iterator(); absAtSinkIt.hasNext(); ) {
+		for (Iterator<AbstractionAtSink> absAtSinkIt = res.iterator(); absAtSinkIt.hasNext();) {
 			AbstractionAtSink curAbs = absAtSinkIt.next();
 			for (AbstractionAtSink checkAbs : res)
-				if (checkAbs != curAbs
-						&& checkAbs.getSinkStmt() == curAbs.getSinkStmt()
+				if (checkAbs != curAbs && checkAbs.getSinkStmt() == curAbs.getSinkStmt()
 						&& checkAbs.getAbstraction().isImplicit() == curAbs.getAbstraction().isImplicit()
 						&& checkAbs.getAbstraction().getSourceContext() == curAbs.getAbstraction().getSourceContext())
-					if (checkAbs.getAbstraction().getAccessPath().entails(
-							curAbs.getAbstraction().getAccessPath())) {
+					if (checkAbs.getAbstraction().getAccessPath().entails(curAbs.getAbstraction().getAccessPath())) {
 						absAtSinkIt.remove();
 						break;
 					}
 		}
 
-		logger.info("IFDS problem with {} forward and {} backward edges solved, "
-				+ "processing {} results...", forwardSolver.propagationCount,
-				backSolver == null ? 0 : backSolver.propagationCount,
+		logger.info("IFDS problem with {} forward and {} backward edges solved, " + "processing {} results...",
+				forwardSolver.propagationCount, backSolver == null ? 0 : backSolver.propagationCount,
 				res == null ? 0 : res.size());
 
 		// Force a cleanup. Everything we need is reachable through the
@@ -459,13 +460,13 @@ public class Infoflow extends AbstractInfoflow {
 		Runtime.getRuntime().gc();
 
 		if (!config.getIncrementalResultReporting()) {
-	   		builder.computeTaintPaths(res);
-	   		if (this.results == null)
-	   			this.results = builder.getResults();
-	   		else
-	   			this.results.addAll(builder.getResults());
+			builder.computeTaintPaths(res);
+			if (this.results == null)
+				this.results = builder.getResults();
+			else
+				this.results.addAll(builder.getResults());
 		}
-		
+
 		// Wait for the path builders to terminate
 		try {
 			resultExecutor.awaitCompletion();
@@ -478,31 +479,32 @@ public class Infoflow extends AbstractInfoflow {
 			// re-process those abstractions that received new neighbors in the
 			// meantime
 			builder.runIncrementalPathCompuation();
-			
+
 			try {
 				resultExecutor.awaitCompletion();
 			} catch (InterruptedException e) {
 				logger.error("Could not wait for executor termination", e);
-			}			
+			}
 		}
 		resultExecutor.shutdown();
 
 		if (results == null || results.getResults().isEmpty())
 			logger.warn("No results found.");
-		else for (ResultSinkInfo sink : results.getResults().keySet()) {
-			logger.info("The sink {} in method {} was called with values from the following sources:",
-                    sink, iCfg.getMethodOf(sink.getSink()).getSignature() );
-			for (ResultSourceInfo source : results.getResults().get(sink)) {
-				logger.info("- {} in method {}",source, iCfg.getMethodOf(source.getSource()).getSignature());
-				if (source.getPath() != null) {
-					logger.info("\ton Path: ");
-					for (Unit p : source.getPath()) {
-						logger.info("\t -> " + iCfg.getMethodOf(p));
-						logger.info("\t\t -> " + p);
+		else
+			for (ResultSinkInfo sink : results.getResults().keySet()) {
+				logger.info("The sink {} in method {} was called with values from the following sources:", sink,
+						iCfg.getMethodOf(sink.getSink()).getSignature());
+				for (ResultSourceInfo source : results.getResults().get(sink)) {
+					logger.info("- {} in method {}", source, iCfg.getMethodOf(source.getSource()).getSignature());
+					if (source.getPath() != null) {
+						logger.info("\ton Path: ");
+						for (Unit p : source.getPath()) {
+							logger.info("\t -> " + iCfg.getMethodOf(p));
+							logger.info("\t\t -> " + p);
+						}
 					}
 				}
 			}
-		}
 
 		for (ResultsAvailableHandler handler : onResultsAvailable)
 			handler.onResultsAvailable(iCfg, results);
@@ -516,6 +518,7 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Gets the memory used by FlowDroid at the moment
+	 * 
 	 * @return FlowDroid's current memory consumption in bytes
 	 */
 	private long getUsedMemory() {
@@ -525,7 +528,9 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Runs all code optimizers
-	 * @param sourcesSinks The SourceSinkManager
+	 * 
+	 * @param sourcesSinks
+	 *            The SourceSinkManager
 	 */
 	private void eliminateDeadCode(ISourceSinkManager sourcesSinks) {
 		ICodeOptimizer dce = new DeadCodeEliminator();
@@ -535,29 +540,29 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Creates a new executor object for spawning worker threads
-	 * @param numThreads The number of threads to use
+	 * 
+	 * @param numThreads
+	 *            The number of threads to use
 	 * @return The generated executor
 	 */
 	private CountingThreadPoolExecutor createExecutor(int numThreads) {
-		return new CountingThreadPoolExecutor
-				(config.getMaxThreadNum() == -1 ? numThreads
-						: Math.min(config.getMaxThreadNum(), numThreads),
-				Integer.MAX_VALUE, 30, TimeUnit.SECONDS,
-				new LinkedBlockingQueue<Runnable>());
+		return new CountingThreadPoolExecutor(
+				config.getMaxThreadNum() == -1 ? numThreads : Math.min(config.getMaxThreadNum(), numThreads),
+				Integer.MAX_VALUE, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
 	}
-	
+
 	private Collection<SootMethod> getMethodsForSeeds(IInfoflowCFG icfg) {
 		List<SootMethod> seeds = new LinkedList<SootMethod>();
 		// If we have a callgraph, we retrieve the reachable methods. Otherwise,
-		// we have no choice but take all application methods as an approximation
+		// we have no choice but take all application methods as an
+		// approximation
 		if (Scene.v().hasCallGraph()) {
 			List<MethodOrMethodContext> eps = new ArrayList<MethodOrMethodContext>(Scene.v().getEntryPoints());
 			ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), eps.iterator(), null);
 			reachableMethods.update();
 			for (Iterator<MethodOrMethodContext> iter = reachableMethods.listener(); iter.hasNext();)
 				seeds.add(iter.next().method());
-		}
-		else {
+		} else {
 			long beforeSeedMethods = System.nanoTime();
 			Set<SootMethod> doneSet = new HashSet<SootMethod>();
 			for (SootMethod sm : Scene.v().getEntryPoints())
@@ -567,8 +572,8 @@ public class Infoflow extends AbstractInfoflow {
 		return seeds;
 	}
 
-	private void getMethodsForSeedsIncremental(SootMethod sm,
-			Set<SootMethod> doneSet, List<SootMethod> seeds, IInfoflowCFG icfg) {
+	private void getMethodsForSeedsIncremental(SootMethod sm, Set<SootMethod> doneSet, List<SootMethod> seeds,
+			IInfoflowCFG icfg) {
 		assert Scene.v().hasFastHierarchy();
 		if (!sm.isConcrete() || !sm.getDeclaringClass().isApplicationClass() || !doneSet.add(sm))
 			return;
@@ -584,36 +589,36 @@ public class Infoflow extends AbstractInfoflow {
 	/**
 	 * Scans the given method for sources and sinks contained in it. Sinks are
 	 * just counted, sources are added to the InfoflowProblem as seeds.
-	 * @param sourcesSinks The SourceSinkManager to be used for identifying
-	 * sources and sinks
-	 * @param forwardProblem The InfoflowProblem in which to register the
-	 * sources as seeds
-	 * @param m The method to scan for sources and sinks
+	 * 
+	 * @param sourcesSinks
+	 *            The SourceSinkManager to be used for identifying sources and
+	 *            sinks
+	 * @param forwardProblem
+	 *            The InfoflowProblem in which to register the sources as seeds
+	 * @param m
+	 *            The method to scan for sources and sinks
 	 * @return The number of sinks found in this method
 	 */
-	private int scanMethodForSourcesSinks(
-			final ISourceSinkManager sourcesSinks,
-			InfoflowProblem forwardProblem,
+	private int scanMethodForSourcesSinks(final ISourceSinkManager sourcesSinks, InfoflowProblem forwardProblem,
 			SootMethod m) {
 		if (getConfig().getLogSourcesAndSinks() && collectedSources == null) {
 			collectedSources = new HashSet<>();
 			collectedSinks = new HashSet<>();
 		}
-		
+
 		int sinkCount = 0;
 		if (m.hasActiveBody()) {
 			// Check whether this is a system class we need to ignore
 			final String className = m.getDeclaringClass().getName();
-			if (config.getIgnoreFlowsInSystemPackages()
-					&& SystemClassHandler.isClassInSystemPackage(className))
+			if (config.getIgnoreFlowsInSystemPackages() && SystemClassHandler.isClassInSystemPackage(className))
 				return sinkCount;
 
 			// Look for a source in the method. Also look for sinks. If we
 			// have no sink in the program, we don't need to perform any
 			// analysis
 			PatchingChain<Unit> units = m.getActiveBody().getUnits();
-			Stmt old_s = null; 
-			
+			Stmt old_s = null;
+
 			for (Unit u : units) {
 				Stmt s = (Stmt) u;
 				if (sourcesSinks.getSourceInfo(s, iCfg) != null) {
@@ -622,28 +627,23 @@ public class Infoflow extends AbstractInfoflow {
 						collectedSources.add(s);
 					logger.debug("Source found: {}", u);
 				}
-				
+
 				if (sourcesSinks.isSink(s, iCfg, null)) {
 					logger.debug("Sink found: {}", u);
 					sinkCount++;
 					if (isIntentSink(s)) {
 						String emph = "\u001B[31m";
 						String ansi_reset = "\u001B[0m";
-						logger.info(emph + "INTENT SINK: " + ansi_reset
-								+ s.toString());
-						logger.info(emph + "PREV: " + ansi_reset
-								+ old_s.toString());
+						logger.info(emph + "INTENT SINK: " + ansi_reset + s.toString());
+						logger.info(emph + "PREV: " + ansi_reset + old_s.toString());
 						String intentID = extractIntentID(old_s);
 						logger.info(emph + "IntentID: " + ansi_reset + intentID);
 						s.addTag(new IntentTag("IntentID", intentID));
-						logger.info(emph
-								+ "IntentID: "
-								+ ansi_reset
-								+ ((IntentTag) s.getTag("IntentID"))
-										.getIntentID());
+						logger.info(
+								emph + "IntentID: " + ansi_reset + ((IntentTag) s.getTag("IntentID")).getIntentID());
 					}
 				}
-				old_s = s;	
+				old_s = s;
 			}
 
 		}
@@ -665,7 +665,9 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Adds a handler that is called when information flow results are available
-	 * @param handler The handler to add
+	 * 
+	 * @param handler
+	 *            The handler to add
 	 */
 	public void addResultsAvailableHandler(ResultsAvailableHandler handler) {
 		this.onResultsAvailable.add(handler);
@@ -673,7 +675,9 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Sets a handler which is invoked whenever a taint is propagated
-	 * @param handler The handler to be invoked when propagating taints
+	 * 
+	 * @param handler
+	 *            The handler to be invoked when propagating taints
 	 */
 	public void setTaintPropagationHandler(TaintPropagationHandler handler) {
 		this.taintPropagationHandler = handler;
@@ -681,15 +685,20 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Sets a handler which is invoked whenever an alias is propagated backwards
-	 * @param handler The handler to be invoked when propagating aliases
+	 * 
+	 * @param handler
+	 *            The handler to be invoked when propagating aliases
 	 */
 	public void setBackwardsPropagationHandler(TaintPropagationHandler handler) {
 		this.backwardsPropagationHandler = handler;
 	}
 
 	/**
-	 * Removes a handler that is called when information flow results are available
-	 * @param handler The handler to remove
+	 * Removes a handler that is called when information flow results are
+	 * available
+	 * 
+	 * @param handler
+	 *            The handler to remove
 	 */
 	public void removeResultsAvailableHandler(ResultsAvailableHandler handler) {
 		onResultsAvailable.remove(handler);
@@ -697,8 +706,9 @@ public class Infoflow extends AbstractInfoflow {
 
 	/**
 	 * Gets the maximum memory consumption during the last analysis run
+	 * 
 	 * @return The maximum memory consumption during the last analysis run if
-	 * available, otherwise -1
+	 *         available, otherwise -1
 	 */
 	public long getMaxMemoryConsumption() {
 		return this.maxMemoryConsumption;
@@ -709,65 +719,197 @@ public class Infoflow extends AbstractInfoflow {
 	 * for the taint analysis. This method will return null if source and sink
 	 * logging has not been enabled (see InfoflowConfiguration.
 	 * setLogSourcesAndSinks()),
+	 * 
 	 * @return The set of sources collected for taint analysis
 	 */
 	public Set<Stmt> getCollectedSources() {
 		return this.collectedSources;
 	}
-	
- 	// BEGIN DIDFAIL ADDITIONS
-	 
- 	public static boolean isIntentSink(Stmt stmt) {
- 		if (!stmt.containsInvokeExpr()) {
- 			return false;
- 		}	
- 		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
- 		SootMethod meth = ie.getMethod();
- 		SootClass android_content_Context = Scene.v().getSootClass("android.content.Context");
- 		// FIXME: Check the method name better!
- 		if (meth.toString().indexOf("startActivity") == -1) {
- 			return false;
- 		}
- 		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()));
- 	}
- 	
- 	public static boolean isIntentResultSink(Stmt stmt) {
- 		if (!stmt.containsInvokeExpr()) {
- 			return false;
- 		}	
- 		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
- 		SootMethod meth = ie.getMethod();
- 		SootClass android_content_Context = Scene.v().getSootClass("android.app.Activity");
- 		if (meth.toString().indexOf("setResult") == -1) {
- 			return false;
- 		}
- 		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()));
- 	}
- 	
- 	public static String extractIntentID(Stmt prevStmt) {
- 		try {
- 			if (!prevStmt.containsInvokeExpr()) {
- 				return "";
- 			}
- 			AbstractInvokeExpr ie = (AbstractInvokeExpr) prevStmt.getInvokeExpr();
- 			String sig = ie.getMethod().getSignature();
- 			if (!sig.equals("<android.content.Intent: android.content.Intent putExtra(java.lang.String,java.lang.String)>")) {
- 				return "";
- 			}
- 			StringConstant ret = (StringConstant) ie.getArg(0);
- 			return ret.value;
- 		} catch (Exception e) {
- 			return "";
- 		}
- 	}
- 	
- 	// END DIDFAIL ADDITION
-	
+
+	// BEGIN DIDFAIL ADDITIONS
+
+	public static boolean isIntentSink(Stmt stmt) {
+		if (!stmt.containsInvokeExpr()) {
+			return false;
+		}
+		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
+		SootMethod meth = ie.getMethod();
+		SootClass android_content_Context = Scene.v().getSootClass("android.content.Context");
+		
+		// FIXME: Check the method name better!
+		List<String> whitelist = new ArrayList<String>();
+		whitelist.add("startActivity");
+		whitelist.add("startService");
+		whitelist.add("peekService");
+		whitelist.add("bindService");
+		whitelist.add("sendBroadcast");
+				
+		String methodString = meth.toString();
+		boolean whiteListed = false;
+		for(String item : whitelist) {
+			if(methodString.indexOf(item) != -1) {
+				whiteListed = true;
+			}
+		}
+		
+		if(whiteListed) {
+			return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()));
+		} else {
+			return false;
+		}		
+	}
+
+	public static boolean isIntentResultSink(Stmt stmt) {
+		if (!stmt.containsInvokeExpr()) {
+			return false;
+		}
+		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
+		SootMethod meth = ie.getMethod();
+		SootClass android_content_Context = Scene.v().getSootClass("android.app.Activity");
+		if (meth.toString().indexOf("setResult") == -1) {
+			return false;
+		}
+		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()));
+	}
+
+	public static String extractIntentID(Stmt prevStmt) {
+		try {
+			if (!prevStmt.containsInvokeExpr()) {
+				return "";
+			}
+			AbstractInvokeExpr ie = (AbstractInvokeExpr) prevStmt.getInvokeExpr();
+			String sig = ie.getMethod().getSignature();
+			if (!sig.equals(
+					"<android.content.Intent: android.content.Intent putExtra(java.lang.String,java.lang.String)>")) {
+				return "";
+			}
+			StringConstant ret = (StringConstant) ie.getArg(0);
+			return ret.value;
+		} catch (Exception e) {
+			return "";
+		}
+	}
+
+	public static String extractContentProviderURI(Stmt prevStmt, IInfoflowCFG cfg) {
+		try {
+			if (!prevStmt.containsInvokeExpr()) {
+				return "";
+			}
+			AbstractInvokeExpr ie = (AbstractInvokeExpr) prevStmt.getInvokeExpr();
+			SootMethod m = cfg.getMethodOf(prevStmt);
+			if (m.hasActiveBody()) {
+				PatchingChain<Unit> units = m.getActiveBody().getUnits();
+				for (Unit u : units) {
+					Stmt s = (Stmt) u;
+					try {
+						AbstractInvokeExpr ie_s = (AbstractInvokeExpr) s.getInvokeExpr();
+						SootMethod meth_s = ie_s.getMethod();
+						String par_s = ie_s.getArg(0).toString();
+						if (meth_s.toString().indexOf("parse") != -1 && par_s.contains("content://")) {
+							return par_s;
+						}
+					} catch (Exception e) {
+					}
+				}
+			}
+			/*
+			 * 64 byte random string to conflate all content providers into 1
+			 * entity
+			 */
+			return "\"hA8ZtGtfsxQuvS9RGfDruPr85TIWhZQPpSFBXnguAFOEQpaFw8zM8a2fZ5wet1eW\"";
+		} catch (Exception e) {
+			return "";
+		}
+	}
+
+	// Add file path related xiaoxiao
+	public static boolean isFileSink(Stmt stmt) {
+		if (!stmt.containsInvokeExpr()) {
+			return false;
+		}
+		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
+		SootMethod meth = ie.getMethod();
+		SootClass android_content_Context = Scene.v().getSootClass("java.io.Writer");
+		SootClass android_content_Context1 = Scene.v().getSootClass("java.io.OutputStream");
+		SootClass android_content_Context2 = Scene.v().getSootClass("java.io.FileOutputStream");
+		// FIXME: Check the method name better!
+		if (meth.toString().indexOf("write") == -1) {
+			return false;
+		}
+		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()))
+				|| ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context1, meth.getDeclaringClass()))
+				|| ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context2, meth.getDeclaringClass()));
+	}
+
+	public static boolean isFileSource(Stmt stmt) {
+		if (!stmt.containsInvokeExpr()) {
+			return false;
+		}
+		AbstractInvokeExpr ie = (AbstractInvokeExpr) stmt.getInvokeExpr();
+		SootMethod meth = ie.getMethod();
+		SootClass android_content_Context = Scene.v().getSootClass("java.io.BufferedReader");
+		SootClass android_content_Context1 = Scene.v().getSootClass("java.io.InputStream");
+		SootClass android_content_Context2 = Scene.v().getSootClass("java.io.FileInputStream");
+		// FIXME: Check the method name better!
+		if (meth.toString().indexOf("read") == -1) {
+			return false;
+		}
+		return ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context, meth.getDeclaringClass()))
+				|| ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context1, meth.getDeclaringClass()))
+				|| ((new Hierarchy()).isClassSuperclassOfIncluding(android_content_Context2, meth.getDeclaringClass()));
+	}
+
+	public static String extractFilePath(Stmt prevStmt, IInfoflowCFG cfg) {
+		try {
+			// return prevStmt.toString() ":" (prevStmt.getClass().toString());
+			if (!prevStmt.containsInvokeExpr()) {
+				return "";
+			}
+			/*
+			 * JInvokeStmt invoke; List<String> names = new ArrayList<String>();
+			 * String stmt = prevStmt.toString();
+			 * names.add(stmt.substring((stmt.indexOf("virtualinvoke")14),
+			 * stmt.indexOf(".<")));
+			 */
+			AbstractInvokeExpr ie = (AbstractInvokeExpr) prevStmt.getInvokeExpr();
+			SootMethod m = cfg.getMethodOf(prevStmt);
+			if (m.hasActiveBody()) {
+				// Check whether this is a system class we need to ignore
+				final String className = m.getDeclaringClass().getName();
+				if (SystemClassHandler.isClassInSystemPackage(className))
+					return "";
+				PatchingChain<Unit> units = m.getActiveBody().getUnits();
+				JimpleBody body = (JimpleBody) m.getActiveBody();
+				Logger logger = LoggerFactory.getLogger(className);
+				logger.info("FilePath Units\n{}", body);
+				for (Unit u : units) {
+					Stmt s = (Stmt) u;
+					try {
+						AbstractInvokeExpr ie_s = (AbstractInvokeExpr) s.getInvokeExpr();
+						SootMethod meth_s = ie_s.getMethod();
+						String par_s = ie_s.getArg(0).toString();
+						if (meth_s.toString().indexOf("append") != -1 && (par_s.contains("/") || par_s.contains("."))) {
+							return par_s;
+						}
+					} catch (Exception e) {
+					}
+				}
+				return "";
+			}
+			return "";
+		} catch (Exception e) {
+			return "";
+		}
+	}
+
+	// END DIDFAIL ADDITION
+
 	/**
 	 * Gets the concrete set of sinks that have been collected in preparation
 	 * for the taint analysis. This method will return null if source and sink
 	 * logging has not been enabled (see InfoflowConfiguration.
 	 * setLogSourcesAndSinks()),
+	 * 
 	 * @return The set of sinks collected for taint analysis
 	 */
 	public Set<Stmt> getCollectedSinks() {
